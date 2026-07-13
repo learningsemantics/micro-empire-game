@@ -11,6 +11,8 @@ type AdviserKey = "finance" | "marketing" | "people" | "operations";
 type GameMode = "campaign" | "daily" | "custom";
 type StaffMember = { id: number; name: string; role: string; skill: number; morale: number; salary: number };
 type Competitor = { name: string; price: number; reputation: number; share: number };
+type ExperimentKey = "price" | "segment" | "offer";
+type Experiment = { type: ExperimentKey; progress: number; target: number };
 type Phase = "home" | "modes" | "scenario" | "select" | "district" | "play" | "dayEnd" | "decision" | "result";
 
 type GameState = {
@@ -47,8 +49,18 @@ type GameState = {
   campaignDays: number;
   scenarioName: string;
   seed: number;
+  interviews: number;
+  insights: number;
+  pmf: number;
+  acquiredCustomers: number;
+  repeatCustomers: number;
+  referrals: number;
+  marketingSpend: number;
+  totalCogs: number;
+  experiment: Experiment | null;
+  experimentHistory: ExperimentKey[];
   segmentSales: Record<SegmentKey, number>;
-  customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string };
+  customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string; returning: boolean; source: string };
   message: string;
   event: string;
   dailyRevenue: number;
@@ -136,6 +148,7 @@ const initialState: GameState = {
   stageRewarded: 0, decision: null, storyLog: [],
   difficulty: "operator", adviserTrust: { finance: 50, marketing: 50, people: 50, operations: 50 }, achievements: [],
   mode: "campaign", campaignDays: 30, scenarioName: "The 30-Day Founder Campaign", seed: 2026,
+  interviews: 0, insights: 0, pmf: 35, acquiredCustomers: 0, repeatCustomers: 0, referrals: 0, marketingSpend: 0, totalCogs: 0, experiment: null, experimentHistory: [],
   competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
@@ -150,7 +163,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [sound, setSound] = useState(true);
   const [selected, setSelected] = useState<BusinessKey>("coffee");
-  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council">("trade");
+  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council" | "lab">("trade");
   const [hydrated, setHydrated] = useState(false);
   const [scenarioDraft, setScenarioDraft] = useState({ name: "My Founder Challenge", cash: 1000, days: 20, difficulty: "operator" as DifficultyKey, business: "coffee" as BusinessKey, district: "junction" as DistrictKey, seed: 4242 });
   const [shareStatus, setShareStatus] = useState("");
@@ -176,6 +189,12 @@ export default function Home() {
   const rating = score >= 16000 ? "Empire Builder" : score >= 11000 ? "Micro-SaaS Master" : score >= 6500 ? "Growth Operator" : "Resilient Founder";
   const winCash = Math.round(15000 * game.campaignDays / 30);
   const winCustomers = Math.round(100 * game.campaignDays / 30);
+  const conversion = game.served + game.missed ? game.served / (game.served + game.missed) : 0;
+  const retention = game.served ? game.repeatCustomers / game.served : 0;
+  const cac = game.acquiredCustomers ? game.marketingSpend / game.acquiredCustomers : 0;
+  const averageOrder = game.served ? game.revenue / game.served : 0;
+  const ltv = averageOrder * Math.min(5, 1 / Math.max(.2, 1 - retention));
+  const grossMargin = game.revenue ? (game.revenue - game.totalCogs) / game.revenue : 0;
 
   function beep(tone = 520) {
     if (!sound) return;
@@ -193,12 +212,12 @@ export default function Home() {
     setGame({ ...initialState, phase: "play", business: selected, cash: game.cash - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
       district: game.district, difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
-      customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
+      customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setShowHelp(true);
   }
 
-  function makeCustomer(key: BusinessKey, base: number, rep: number, district: DistrictKey, price: number, offer: number, difficulty: DifficultyKey) {
+  function makeCustomer(key: BusinessKey, base: number, rep: number, district: DistrictKey, price: number, offer: number, difficulty: DifficultyKey, pmf: number, referrals: number) {
     const local = DISTRICTS[district].segments;
     const all = Object.keys(SEGMENTS) as SegmentKey[];
     const segment = Math.random() < .78 ? local[Math.floor(Math.random() * local.length)] : all[Math.floor(Math.random() * all.length)];
@@ -207,7 +226,9 @@ export default function Home() {
     const value = Math.round(base * price * offerMultiplier * (0.92 + Math.random() * .16) * (1 + Math.max(0, rep - 50) / 300));
     const budget = Math.round(profile.budget * (key === "coffee" ? .75 : key === "career" ? 1.15 : 1.8) * DIFFICULTIES[difficulty].budget);
     const fit = local.includes(segment) ? "Strong local fit" : "Visiting segment";
-    return { name: PEOPLE[Math.floor(Math.random() * PEOPLE.length)], order: ORDERS[key][Math.floor(Math.random() * ORDERS[key].length)], value, budget, patience: profile.patience, segment, fit };
+    const returning = Math.random() < clamp(pmf / 160, .05, .58);
+    const source = returning ? "Repeat customer" : Math.random() < clamp(referrals / 20, 0, .35) ? "Customer referral" : "New acquisition";
+    return { name: PEOPLE[Math.floor(Math.random() * PEOPLE.length)], order: ORDERS[key][Math.floor(Math.random() * ORDERS[key].length)], value, budget, patience: profile.patience + (returning ? 1 : 0), segment, fit, returning, source };
   }
 
   function advance(mutator: (g: GameState) => GameState) {
@@ -217,13 +238,13 @@ export default function Home() {
       if (customer) {
         customer = { ...customer, patience: customer.patience - 1 };
         if (customer.patience <= 0) {
-          next = { ...next, reputation: clamp(next.reputation - 5, 0, 100), missed: next.missed + 1, message: `${customer.name} left unhappy. Reputation -5.` };
+          next = { ...next, reputation: clamp(next.reputation - 5, 0, 100), pmf: clamp(next.pmf - 1, 0, 100), missed: next.missed + 1, message: `${customer.name} left unhappy. Reputation -5 · PMF -1.` };
           customer = null;
         }
       }
       const newHour = next.hour + 1;
       next = { ...next, hour: newHour, customer };
-      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty);
+      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals);
       if (newHour >= 17) return closeDay(next);
       return updateQuests(next);
     });
@@ -245,7 +266,7 @@ export default function Home() {
     advance(g => {
       if (!g.customer) return g;
       if (g.customer.value > g.customer.budget * 1.15) {
-        return { ...g, reputation: clamp(g.reputation - 2, 0, 100), missed: g.missed + 1,
+        return { ...g, reputation: clamp(g.reputation - 2, 0, 100), pmf: clamp(g.pmf - 2, 0, 100), missed: g.missed + 1,
           message: `${g.customer.name} declined—${money(g.customer.value)} exceeded their ${g.customer.segment.toLowerCase()} budget.`, customer: null };
       }
       const bonus = 1 + g.decor * .08;
@@ -254,13 +275,21 @@ export default function Home() {
       const operatingCost = Math.round([4, 11, 24][g.offer] * (g.business === "coffee" ? 1 : g.business === "career" ? 2 : 4) * supplier.cost);
       const staffSkill = g.staff.reduce((sum, member) => sum + member.skill, 0);
       const rep = Math.max(1, [1, 3, 5][g.offer] + g.speed + supplier.quality + Math.floor(staffSkill / 3));
+      const experimentProgress = g.experiment ? g.experiment.progress + 1 : 0;
+      const experimentComplete = Boolean(g.experiment && experimentProgress >= g.experiment.target);
+      const referralsEarned = g.reputation >= 75 && (g.customer.returning || g.pmf >= 70) ? 1 : 0;
+      const pmfGain = g.customer.fit === "Strong local fit" ? 2 : 1;
       beep(760);
       return { ...g, cash: g.cash + earned - operatingCost, revenue: g.revenue + earned, dailyRevenue: g.dailyRevenue + earned,
-        expenses: g.expenses + operatingCost, dailyExpenses: g.dailyExpenses + operatingCost, dailyCogs: g.dailyCogs + operatingCost,
+        expenses: g.expenses + operatingCost, dailyExpenses: g.dailyExpenses + operatingCost, dailyCogs: g.dailyCogs + operatingCost, totalCogs: g.totalCogs + operatingCost,
         staff: g.staff.map(member => ({ ...member, morale: clamp(member.morale - 2, 20, 100) })),
         served: g.served + 1, capacity: g.capacity - 1, reputation: clamp(g.reputation + rep, 0, 100),
+        pmf: clamp(g.pmf + pmfGain + (experimentComplete ? 6 : 0), 0, 100), acquiredCustomers: g.acquiredCustomers + (g.customer.returning ? 0 : 1),
+        repeatCustomers: g.repeatCustomers + (g.customer.returning ? 1 : 0), referrals: g.referrals + referralsEarned,
+        experimentHistory: experimentComplete && g.experiment ? [...g.experimentHistory, g.experiment.type] : g.experimentHistory,
+        experiment: experimentComplete ? null : g.experiment ? { ...g.experiment, progress: experimentProgress } : null,
         segmentSales: { ...g.segmentSales, [g.customer.segment]: (g.segmentSales[g.customer.segment] || 0) + 1 },
-        message: `${g.customer.name} loved it! +${money(earned)} · Reputation +${rep}`, customer: null };
+        message: experimentComplete ? `Experiment complete: evidence improved product-market fit by 6.` : `${g.customer.name} loved it! +${money(earned)} · PMF +${pmfGain}${referralsEarned ? " · Referral earned" : ""}`, customer: null };
     });
   }
 
@@ -268,7 +297,7 @@ export default function Home() {
     const cost = 75 + game.marketing * 25;
     if (game.cash < cost) return;
     advance(g => ({ ...g, cash: g.cash - cost, expenses: g.expenses + cost, dailyExpenses: g.dailyExpenses + cost,
-      marketing: g.marketing + 1, reputation: clamp(g.reputation + 7, 0, 100), message: `Local campaign launched. Reputation +7.` }));
+      marketing: g.marketing + 1, marketingSpend: g.marketingSpend + cost, reputation: clamp(g.reputation + 7, 0, 100), message: `Local campaign launched. Reputation +7.` }));
     beep(600);
   }
 
@@ -279,7 +308,7 @@ export default function Home() {
     if (!missing || game.cash < cost) return;
     const delivered = Math.random() * 100 <= supplier.reliability ? game.maxCapacity : Math.max(game.capacity + 1, Math.round(game.maxCapacity * .65));
     advance(g => ({ ...g, cash: g.cash - cost, expenses: g.expenses + cost, dailyExpenses: g.dailyExpenses + cost,
-      dailyCogs: g.dailyCogs + cost, capacity: delivered, message: delivered === g.maxCapacity ? `${supplier.name} delivered in full for ${money(cost)}.` : `${supplier.name} had a shortfall—only ${delivered}/${g.maxCapacity} capacity received.` }));
+      dailyCogs: g.dailyCogs + cost, totalCogs: g.totalCogs + cost, capacity: delivered, message: delivered === g.maxCapacity ? `${supplier.name} delivered in full for ${money(cost)}.` : `${supplier.name} had a shortfall—only ${delivered}/${g.maxCapacity} capacity received.` }));
     beep(460);
   }
 
@@ -332,7 +361,7 @@ export default function Home() {
         reputation: clamp(g.reputation + (stageUp ? 5 : 0), 0, 100), stageRewarded: Math.max(g.stageRewarded, nextStage),
         staff: g.staff.map(member => ({ ...member, morale: clamp(member.morale + 8, 20, 100) })),
         message: stageUp ? `Welcome to ${STAGES[nextStage].name}. Your operating ceiling just expanded.` : `Day ${nextDayNumber} begins. ${ev.text}` });
-      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty);
+      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals);
       return next;
     });
     beep(650);
@@ -377,6 +406,20 @@ export default function Home() {
   function shareScenario() { navigator.clipboard?.writeText(scenarioCode()); setShareStatus("Challenge code copied"); window.setTimeout(()=>setShareStatus(""),1800); }
   function importScenario(code: string) { try { const data=JSON.parse(decodeURIComponent(escape(atob(code.trim())))); setScenarioDraft({ ...scenarioDraft, ...data }); setShareStatus("Challenge imported"); } catch { setShareStatus("Invalid challenge code"); } }
   function shareScore() { const text=`Micro Empire · ${game.scenarioName}\nScore ${score.toLocaleString()} · ${rating}\n${money(game.cash)} cash · ${game.reputation} reputation · ${game.served} customers\nhttps://learningsemantics.github.io/micro-empire-game/`; navigator.clipboard?.writeText(text); setShareStatus("Scorecard copied"); }
+
+  function interviewCustomer() {
+    if (game.cash < 25) return;
+    advance(g => ({ ...g, cash:g.cash-25, expenses:g.expenses+25, dailyExpenses:g.dailyExpenses+25, interviews:g.interviews+1,
+      insights:g.insights+1, pmf:clamp(g.pmf+2,0,100), message:`Interview insight #${g.insights+1}: ${DISTRICTS[g.district].segments[g.insights % 3]} customers value ${g.offer === 2 ? "proof and premium outcomes" : g.price > 1 ? "clear value justification" : "convenience and trust"}. PMF +2.` }));
+    beep(610);
+  }
+
+  function startExperiment(type: ExperimentKey) {
+    if (game.experiment || game.cash < 100) return;
+    setGame(g => ({ ...g, cash:g.cash-100, expenses:g.expenses+100, dailyExpenses:g.dailyExpenses+100, experiment:{type,progress:0,target:5},
+      message:`${type === "price" ? "Pricing" : type === "segment" ? "Customer segment" : "Offer positioning"} experiment started. Serve five customers to collect evidence.` }));
+    beep(740);
+  }
 
   function adjustPrice(delta: number) {
     setGame(g => ({ ...g, price: clamp(Math.round((g.price + delta) * 10) / 10, .7, 1.5), message: "Pricing updated. Watch how each customer segment responds." }));
@@ -529,6 +572,7 @@ export default function Home() {
             <p className="eyebrow">{business.icon} {business.name}</p>
             <h2>Day {game.day}</h2>
             <div className="stage-card"><i>{STAGES[stageIndex].icon}</i><span><small>{game.mode.toUpperCase()} · {game.scenarioName}</small><b>{STAGES[stageIndex].name}</b><em>{STAGES[stageIndex].note}</em></span></div>
+            <div className="pmf-card"><span><small>PRODUCT–MARKET FIT</small><b>{game.pmf}/100</b></span><i><u style={{width:`${game.pmf}%`}}/></i><em>{game.pmf >= 75 ? "Strong pull · protect retention" : game.pmf >= 50 ? "Promising · keep experimenting" : "Weak signal · interview customers"}</em></div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} · {DIFFICULTIES[game.difficulty].name}<small>{money(Math.round((DISTRICTS[game.district].rent + game.day * 10) * DIFFICULTIES[game.difficulty].rent))} rent due today</small></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
@@ -545,14 +589,14 @@ export default function Home() {
             <Neighbourhood active={game.business!} people={Math.min(10, 3 + game.marketing + Math.floor(game.reputation / 20))}/>
             <div className="store-sign">{business.icon} {business.name}<small>OPEN · {game.capacity}/{game.maxCapacity} {business.stock}</small></div>
             {game.customer ? <div className="customer-card">
-              <div className="avatar">{game.customer.name[0]}</div><div><small>{SEGMENTS[game.customer.segment].icon} {game.customer.segment.toUpperCase()} · {game.customer.fit}</small><strong>{game.customer.name}</strong><span>{game.customer.order} · Price {money(game.customer.value)} · Budget {money(game.customer.budget)}</span>
+              <div className="avatar">{game.customer.name[0]}</div><div><small>{game.customer.source.toUpperCase()} · {SEGMENTS[game.customer.segment].icon} {game.customer.segment.toUpperCase()}</small><strong>{game.customer.name}</strong><span>{game.customer.order} · Price {money(game.customer.value)} · {game.insights >= 3 ? `Budget ${money(game.customer.budget)}` : "Budget signal locked—interview customers"}</span>
               <div className="patience"><i style={{ width: `${game.customer.patience / 3 * 100}%` }}/></div></div>
             </div> : <div className="customer-card quiet">Waiting for the next customer…</div>}
             <div className="toast" aria-live="polite">{game.message}</div>
           </div>
 
           <aside className="action-panel">
-            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
+            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council","lab"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
             {opsTab === "trade" && <>
               <div className="strategy-box"><h4>Market strategy</h4>
                 <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
@@ -572,6 +616,9 @@ export default function Home() {
             {opsTab === "market" && <div className="ops-list"><h4>Competitive market</h4><div className="market-share"><i style={{width:`${playerMarketShare()}%`}}/><b>You {playerMarketShare()}%</b></div>
               {game.competitors.map(c => <article key={c.name}><strong>{c.name}</strong><span>{c.share}% share</span><small>Price {Math.round(c.price*100)}% · Reputation {c.reputation}</small></article>)}<p className="intel">Competitors adjust price and reputation after every day. Your market share responds to both.</p></div>}
             {opsTab === "council" && <div className="ops-list adviser-list"><h4>Agentic advisory council</h4><p className="intel">Advisers optimize different goals. Following one may reduce trust with the others.</p>{(["finance","marketing","people","operations"] as AdviserKey[]).map(key => { const a=adviserAdvice(key); return <article key={key}><div className="adviser-head"><i>{a.icon}</i><span><strong>{a.name} · {a.role}</strong><small>Confidence {a.confidence}% · Trust {game.adviserTrust[key]}%</small></span></div><p>{a.text}</p><button onClick={() => followAdvice(key)}>{a.action}</button></article>; })}</div>}
+            {opsTab === "lab" && <div className="ops-list validation-lab"><h4>Validation lab</h4><button className="action interview" onClick={interviewCustomer}><b>Interview a customer</b><span>{money(25)} · reveals demand · PMF +2</span></button><div className="insight-count"><b>{game.interviews}</b><span>interviews</span><b>{game.insights}</b><span>insights</span></div>
+              <h4>Run an experiment</h4>{game.experiment ? <div className="experiment-live"><b>{game.experiment.type} experiment</b><span>{game.experiment.progress}/{game.experiment.target} customers</span><i><u style={{width:`${game.experiment.progress/game.experiment.target*100}%`}}/></i></div> : <div className="experiment-buttons"><button onClick={()=>startExperiment("price")}>Test price</button><button onClick={()=>startExperiment("segment")}>Test segment</button><button onClick={()=>startExperiment("offer")}>Test offer</button></div>}
+              <h4>Unit economics</h4><div className="metric-grid"><span><small>Conversion</small><b>{Math.round(conversion*100)}%</b></span><span><small>Retention</small><b>{Math.round(retention*100)}%</b></span><span><small>CAC</small><b>{money(cac)}</b></span><span><small>LTV</small><b>{money(ltv)}</b></span><span><small>Gross margin</small><b>{Math.round(grossMargin*100)}%</b></span><span><small>LTV/CAC</small><b>{cac ? (ltv/cac).toFixed(1) : "—"}×</b></span></div><p className="intel">Completed experiments: {game.experimentHistory.length}</p></div>}
           </aside>
         </section>
       )}
@@ -598,6 +645,7 @@ export default function Home() {
           <div className="score">{score.toLocaleString()}<small>Founder score</small></div>
           <div className="report-numbers"><span><small>Ending cash</small><b>{money(game.cash)}</b></span><span><small>Reputation</small><b>{game.reputation}</b></span><span><small>Served</small><b>{game.served}</b></span><span><small>Quests</small><b>{game.quests.filter(Boolean).length}/3</b></span></div>
           <div className="achievement-grid">{Object.entries(ACHIEVEMENTS).map(([id,a]) => <div key={id} className={game.achievements.includes(id) ? "unlocked" : "locked"}><i>{a.icon}</i><b>{a.name}</b><small>{a.note}</small></div>)}</div>
+          <div className="final-validation"><span><small>Product–market fit</small><b>{game.pmf}/100</b></span><span><small>Retention</small><b>{Math.round(retention*100)}%</b></span><span><small>Gross margin</small><b>{Math.round(grossMargin*100)}%</b></span><span><small>LTV/CAC</small><b>{cac ? (ltv/cac).toFixed(1) : "—"}×</b></span></div>
           <button className="score-share" onClick={shareScore}>Share scorecard</button>{shareStatus&&<p className="share-status">{shareStatus}</p>}
           <button className="primary" onClick={reset}>Build another empire <span>↻</span></button>
         </div></section>
@@ -605,7 +653,7 @@ export default function Home() {
 
       {showHelp && <div className="help-backdrop" role="dialog" aria-modal="true" aria-label="How to play"><div className="help-card">
         <button className="close" onClick={() => setShowHelp(false)}>×</button><p className="eyebrow">Founder field guide</p><h2>Build wisely. Move quickly.</h2>
-        <ol><li><b>Choose your challenge</b><span>Founder, Operator and Mogul modes reshape rent, budgets and rival pressure.</span></li><li><b>Govern your advisers</b><span>Finance, Growth, People and Operations recommend conflicting actions.</span></li><li><b>Earn achievements</b><span>Six milestones reward sales, trust, team building, leadership and judgment.</span></li><li><b>Win by Day 30</b><span>Finish above $15,000 cash, 75 reputation and 100 customers.</span></li></ol>
+        <ol><li><b>Interview before assuming</b><span>Customer conversations reveal budgets and strengthen product–market fit.</span></li><li><b>Run experiments</b><span>Test price, segment or offer across five customers before changing strategy.</span></li><li><b>Build retention</b><span>Repeat customers and referrals matter more than acquisition alone.</span></li><li><b>Know the economics</b><span>Track CAC, LTV, conversion, gross margin and LTV/CAC in the Validation Lab.</span></li></ol>
         <button className="primary" onClick={() => setShowHelp(false)}>Let’s build</button>
       </div></div>}
     </main>
