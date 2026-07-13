@@ -1,4 +1,4 @@
-const CACHE = "micro-empire-v3";
+const CACHE = "micro-empire-v3-1";
 const CORE = ["/micro-empire-game/", "/micro-empire-game/manifest.webmanifest"];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(CORE))));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))));
