@@ -8,7 +8,7 @@ type SegmentKey = "Student" | "Professional" | "Family" | "Tourist" | "Small Bus
 type SupplierKey = "budget" | "local" | "premium";
 type StaffMember = { id: number; name: string; role: string; skill: number; morale: number; salary: number };
 type Competitor = { name: string; price: number; reputation: number; share: number };
-type Phase = "home" | "select" | "district" | "play" | "dayEnd" | "result";
+type Phase = "home" | "select" | "district" | "play" | "dayEnd" | "decision" | "result";
 
 type GameState = {
   phase: Phase;
@@ -34,6 +34,9 @@ type GameState = {
   competitors: Competitor[];
   dailyCogs: number;
   dailyPayroll: number;
+  stageRewarded: number;
+  decision: string | null;
+  storyLog: string[];
   segmentSales: Record<SegmentKey, number>;
   customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string };
   message: string;
@@ -85,11 +88,28 @@ const STAFF_ROLES: Record<BusinessKey, string[]> = {
   agency: ["Automation Builder", "Account Strategist", "Governance Analyst"],
 };
 
+const TOTAL_DAYS = 30;
+const STAGES = [
+  { name: "Bootstrap", days: "Days 1–7", icon: "●", note: "Prove customers will pay." },
+  { name: "Local Favourite", days: "Days 8–14", icon: "★", note: "Build loyalty and a capable team." },
+  { name: "Growth Business", days: "Days 15–22", icon: "▲", note: "Defend margin while competitors react." },
+  { name: "Micro Empire", days: "Days 23–30", icon: "◆", note: "Turn operations into an institution." },
+];
+
+const NARRATIVES: Record<number, { id: string; title: string; text: string; a: string; b: string }> = {
+  4: { id: "review", title: "The One-Star Review", text: "A frustrated customer posts a detailed public complaint. The neighbourhood is watching how you respond.", a: "Refund publicly · Pay $120 · Reputation +9", b: "Defend the team · Morale +12 · Reputation −4" },
+  8: { id: "festival", title: "The Junction Festival", text: "Organizers offer you the anchor booth. It could transform awareness, but the fee lands before the next rent payment.", a: "Sponsor it · Pay $350 · Reputation +14", b: "Stay focused · Cash +$120 from normal trade" },
+  13: { id: "corporate", title: "The Corporate Contract", text: "A major client wants a discounted exclusive contract. Revenue is guaranteed, but smaller customers may feel abandoned.", a: "Sign exclusivity · Cash +$1,400 · Reputation −7", b: "Protect independence · Reputation +8" },
+  19: { id: "talent", title: "Your Best Person Has an Offer", text: "A competitor approaches your most skilled employee. Keeping them will reset expectations across the team.", a: "Counteroffer · Pay $500 · Team morale +18", b: "Let them leave · Lose top employee · Cash protected" },
+  24: { id: "investor", title: "The Expansion Offer", text: "An investor offers growth capital in exchange for influence over pricing and operating strategy.", a: "Take capital · Cash +$3,000 · Price locked premium", b: "Remain independent · Reputation +12 · Capacity +3" },
+};
+
 const initialState: GameState = {
   phase: "home", business: null, district: "junction", day: 1, hour: 9, cash: 1000, reputation: 50,
   capacity: 8, maxCapacity: 8, served: 0, missed: 0, revenue: 0, expenses: 0,
   speed: 0, marketing: 0, decor: 0, price: 1, offer: 1,
   supplier: "local", staff: [], dailyCogs: 0, dailyPayroll: 0,
+  stageRewarded: 0, decision: null, storyLog: [],
   competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
@@ -122,8 +142,9 @@ export default function Home() {
 
   const business = game.business ? BUSINESSES[game.business] : null;
   const clock = `${game.hour > 12 ? game.hour - 12 : game.hour}:00 ${game.hour >= 12 ? "PM" : "AM"}`;
-  const score = Math.round(game.cash * .4 + game.reputation * 30 + game.served * 20 + game.quests.filter(Boolean).length * 250);
-  const rating = score >= 7000 ? "Empire Builder" : score >= 5000 ? "Micro-SaaS Master" : score >= 3000 ? "Promising Operator" : "Struggling Founder";
+  const stageIndex = game.day <= 7 ? 0 : game.day <= 14 ? 1 : game.day <= 22 ? 2 : 3;
+  const score = Math.round(game.cash * .35 + game.reputation * 35 + game.served * 28 + playerMarketShare() * 20 + game.storyLog.length * 180);
+  const rating = score >= 16000 ? "Empire Builder" : score >= 11000 ? "Micro-SaaS Master" : score >= 6500 ? "Growth Operator" : "Resilient Founder";
 
   function beep(tone = 520) {
     if (!sound) return;
@@ -177,7 +198,7 @@ export default function Home() {
   }
 
   function updateQuests(g: GameState) {
-    return { ...g, quests: [g.served >= 5, g.reputation >= 70, g.revenue >= 3000] };
+    return { ...g, quests: [g.served >= 30, g.reputation >= 75, g.revenue >= 12000] };
   }
 
   function serve() {
@@ -241,7 +262,7 @@ export default function Home() {
     const cash = g.cash - rent - payroll;
     const expenses = g.expenses + rent + payroll;
     const dailyExpenses = g.dailyExpenses + rent + payroll;
-    const finished = g.day >= 7 || cash < 0;
+    const finished = g.day >= TOTAL_DAYS || cash < 0;
     const playerStrength = g.reputation / Math.max(.7, g.price);
     const competitors = g.competitors.map((c, i) => ({ ...c, price: clamp(Math.round((c.price + (i ? -.05 : .04)) * 100) / 100, .75, 1.35),
       reputation: clamp(c.reputation + (Math.random() > .45 ? 2 : -1), 25, 95), share: clamp(Math.round(c.share + (c.reputation - g.reputation) / 18), 12, 55) }));
@@ -251,7 +272,7 @@ export default function Home() {
       message: cash < 0 ? "The business ran out of cash." : `Day ${g.day} complete. Rent ${money(rent)} · Payroll ${money(payroll)}.` });
   }
 
-  function nextDay() {
+  function beginNextDay(base?: GameState) {
     const events = [
       { text: "Supplier discount: capacity fully restored", apply: (g: GameState) => ({ ...g, capacity: g.maxCapacity }) },
       { text: "Viral neighbourhood post: reputation +10", apply: (g: GameState) => ({ ...g, reputation: clamp(g.reputation + 10, 0, 100) }) },
@@ -260,14 +281,41 @@ export default function Home() {
       { text: "Corporate enquiry: today’s customers pay 15% more", apply: (g: GameState) => ({ ...g, reputation: clamp(g.reputation + 4, 0, 100) }) },
     ];
     const ev = events[Math.floor(Math.random() * events.length)];
-    setGame(g => {
-      const next = ev.apply({ ...g, day: g.day + 1, hour: 9, phase: "play", event: ev.text, dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0,
+    setGame(current => {
+      const g = base || current;
+      const nextDayNumber = g.day + 1;
+      const nextStage = nextDayNumber <= 7 ? 0 : nextDayNumber <= 14 ? 1 : nextDayNumber <= 22 ? 2 : 3;
+      const stageUp = nextStage > g.stageRewarded;
+      const next = ev.apply({ ...g, day: nextDayNumber, hour: 9, phase: "play", event: stageUp ? `${STAGES[nextStage].name} unlocked! $750 growth grant and +3 capacity.` : ev.text,
+        dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0, decision: null,
+        cash: g.cash + (stageUp ? 750 : 0), maxCapacity: g.maxCapacity + (stageUp ? 3 : 0), capacity: stageUp ? g.maxCapacity + 3 : g.capacity,
+        reputation: clamp(g.reputation + (stageUp ? 5 : 0), 0, 100), stageRewarded: Math.max(g.stageRewarded, nextStage),
         staff: g.staff.map(member => ({ ...member, morale: clamp(member.morale + 8, 20, 100) })),
-        message: `Day ${g.day + 1} begins. ${ev.text}` });
+        message: stageUp ? `Welcome to ${STAGES[nextStage].name}. Your operating ceiling just expanded.` : `Day ${nextDayNumber} begins. ${ev.text}` });
       if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer);
       return next;
     });
     beep(650);
+  }
+
+  function continueCampaign() {
+    const story = NARRATIVES[game.day + 1];
+    if (story) setGame(g => ({ ...g, phase: "decision", decision: story.id }));
+    else beginNextDay();
+  }
+
+  function resolveDecision(choice: "a" | "b") {
+    setGame(g => {
+      const id = g.decision;
+      let next = { ...g, storyLog: [...g.storyLog, `${id}:${choice}`] };
+      if (id === "review") next = choice === "a" ? { ...next, cash: next.cash-120, expenses:next.expenses+120, reputation:clamp(next.reputation+9,0,100) } : { ...next, reputation:clamp(next.reputation-4,0,100), staff:next.staff.map(m=>({...m,morale:clamp(m.morale+12,20,100)})) };
+      if (id === "festival") next = choice === "a" ? { ...next, cash:next.cash-350, expenses:next.expenses+350, reputation:clamp(next.reputation+14,0,100) } : { ...next, cash:next.cash+120, revenue:next.revenue+120 };
+      if (id === "corporate") next = choice === "a" ? { ...next, cash:next.cash+1400, revenue:next.revenue+1400, reputation:clamp(next.reputation-7,0,100) } : { ...next, reputation:clamp(next.reputation+8,0,100) };
+      if (id === "talent") next = choice === "a" ? { ...next, cash:next.cash-500, expenses:next.expenses+500, staff:next.staff.map(m=>({...m,morale:clamp(m.morale+18,20,100)})) } : { ...next, staff:[...next.staff].sort((a,b)=>b.skill-a.skill).slice(1) };
+      if (id === "investor") next = choice === "a" ? { ...next, cash:next.cash+3000, price:1.3 } : { ...next, reputation:clamp(next.reputation+12,0,100), maxCapacity:next.maxCapacity+3, capacity:next.capacity+3 };
+      window.setTimeout(() => beginNextDay(next), 0);
+      return next;
+    });
   }
 
   function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); beep(400); }
@@ -306,7 +354,7 @@ export default function Home() {
           <span>MICRO</span><strong>EMPIRE</strong>
         </button>
         <div className="hud" aria-label="Game status">
-          <Stat icon="▣" label="Day" value={`${game.day} / 7`} />
+          <Stat icon="▣" label="Day" value={`${game.day} / ${TOTAL_DAYS}`} />
           <Stat icon="$" label="Cash" value={money(game.cash)} danger={game.cash < 250} />
           <Stat icon="★" label="Reputation" value={`${game.reputation}`} />
           <Stat icon="◷" label="Time" value={clock} />
@@ -320,8 +368,8 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">The 7-Day Startup Challenge</div>
-            <p className="lede">One storefront. Seven days. Build something the neighbourhood can’t stop talking about.</p>
+            <div className="ribbon">The 30-Day Founder Campaign</div>
+            <p className="lede">One storefront. Four growth stages. Thirty days to build a neighbourhood institution.</p>
             <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "select" }))}>Start your empire <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
@@ -373,12 +421,13 @@ export default function Home() {
           <aside className="left-panel">
             <p className="eyebrow">{business.icon} {business.name}</p>
             <h2>Day {game.day}</h2>
+            <div className="stage-card"><i>{STAGES[stageIndex].icon}</i><span><small>{STAGES[stageIndex].days}</small><b>{STAGES[stageIndex].name}</b><em>{STAGES[stageIndex].note}</em></span></div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name}<small>{money(DISTRICTS[game.district].rent + game.day * 10)} rent due today</small></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
-              <Quest done={game.quests[0]} label="Serve 5 customers" progress={`${Math.min(game.served, 5)}/5`} />
-              <Quest done={game.quests[1]} label="Reach 70 reputation" progress={`${Math.min(game.reputation, 70)}/70`} />
-              <Quest done={game.quests[2]} label="Earn $3,000 revenue" progress={`${money(Math.min(game.revenue, 3000))}/$3,000`} />
+              <Quest done={game.quests[0]} label="Serve 30 customers" progress={`${Math.min(game.served, 30)}/30`} />
+              <Quest done={game.quests[1]} label="Reach 75 reputation" progress={`${Math.min(game.reputation, 75)}/75`} />
+              <Quest done={game.quests[2]} label="Earn $12,000 revenue" progress={`${money(Math.min(game.revenue, 12000))}/$12,000`} />
             </div>
             <div className="ledger"><span>Total revenue <b>{money(game.revenue)}</b></span><span>Total expenses <b>{money(game.expenses)}</b></span><span>Customers served <b>{game.served}</b></span></div>
             <div className="segment-ledger"><h3>Customer mix</h3>{Object.entries(game.segmentSales).filter(([,count]) => count > 0).map(([segment,count]) => <span key={segment}><b>{SEGMENTS[segment as SegmentKey].icon} {segment}</b><i>{count}</i></span>)}{game.served === 0 && <small>No sales yet—learn who responds.</small>}</div>
@@ -424,15 +473,19 @@ export default function Home() {
           <div className="pnl"><h3>Daily profit &amp; loss</h3><span><i>Revenue</i><b>{money(game.dailyRevenue)}</b></span><span><i>Cost of delivery &amp; supply</i><b>−{money(game.dailyCogs)}</b></span><span><i>Payroll</i><b>−{money(game.dailyPayroll)}</b></span><span><i>Rent &amp; other operating costs</i><b>−{money(Math.max(0, game.dailyExpenses-game.dailyCogs-game.dailyPayroll))}</b></span><span className="net"><i>Net operating result</i><b>{money(game.dailyRevenue-game.dailyExpenses)}</b></span></div>
           <div className="report-numbers"><span><small>Cash balance</small><b>{money(game.cash)}</b></span><span><small>Your market share</small><b>{playerMarketShare()}%</b></span><span><small>Team morale</small><b>{game.staff.length ? Math.round(game.staff.reduce((s,m)=>s+m.morale,0)/game.staff.length) : "Solo"}</b></span></div>
           <div className="rep-meter"><span>Neighbourhood reputation</span><b>{game.reputation}/100</b><i><u style={{ width: `${game.reputation}%` }}/></i></div>
-          <button className="primary" onClick={nextDay}>Begin Day {game.day + 1} <span>→</span></button>
+          <button className="primary" onClick={continueCampaign}>Continue campaign <span>→</span></button>
         </div></section>
       )}
 
+      {game.phase === "decision" && game.decision && (() => { const story = Object.values(NARRATIVES).find(s => s.id === game.decision)!; return (
+        <section className="modal-screen story-screen"><div className="report-card story-card"><p className="eyebrow">Founder decision · Day {game.day + 1}</p><div className="story-icon">◈</div><h2>{story.title}</h2><p>{story.text}</p><div className="choice-grid"><button onClick={() => resolveDecision("a")}><small>OPTION A</small><b>{story.a}</b></button><button onClick={() => resolveDecision("b")}><small>OPTION B</small><b>{story.b}</b></button></div><p className="consequence-note">Your choice becomes part of the company’s story and cannot be undone.</p></div></section>
+      ); })()}
+
       {game.phase === "result" && (
         <section className="modal-screen"><div className="report-card final-card">
-          <div className="trophy">{game.cash >= 5000 && game.reputation >= 70 && game.served >= 30 ? "🏆" : "✦"}</div>
-          <p className="eyebrow">Seven-day report</p><h2>{rating}</h2>
-          <p>{game.cash >= 5000 && game.reputation >= 70 && game.served >= 30 ? "You built a neighbourhood institution." : "Every founder learns by building. Your next empire starts smarter."}</p>
+          <div className="trophy">{game.cash >= 15000 && game.reputation >= 75 && game.served >= 100 ? "🏆" : "✦"}</div>
+          <p className="eyebrow">Thirty-day founder report</p><h2>{rating}</h2>
+          <p>{game.cash >= 15000 && game.reputation >= 75 && game.served >= 100 ? "You built a neighbourhood institution ready for its next market." : "Thirty days changed the operator—and the next campaign starts with hard-earned judgment."}</p>
           <div className="score">{score.toLocaleString()}<small>Founder score</small></div>
           <div className="report-numbers"><span><small>Ending cash</small><b>{money(game.cash)}</b></span><span><small>Reputation</small><b>{game.reputation}</b></span><span><small>Served</small><b>{game.served}</b></span><span><small>Quests</small><b>{game.quests.filter(Boolean).length}/3</b></span></div>
           <button className="primary" onClick={reset}>Build another empire <span>↻</span></button>
@@ -441,7 +494,7 @@ export default function Home() {
 
       {showHelp && <div className="help-backdrop" role="dialog" aria-modal="true" aria-label="How to play"><div className="help-card">
         <button className="close" onClick={() => setShowHelp(false)}>×</button><p className="eyebrow">Founder field guide</p><h2>Build wisely. Move quickly.</h2>
-        <ol><li><b>Read the market</b><span>Every district attracts a different customer mix with distinct budgets.</span></li><li><b>Set price and offer</b><span>Premium models earn more reputation but cost more to deliver.</span></li><li><b>Protect your cash</b><span>Restock, market and upgrade—but district rent is due at closing.</span></li><li><b>Win by Day 7</b><span>Finish above $5,000 cash, 70 reputation and 30 customers.</span></li></ol>
+        <ol><li><b>Grow through four stages</b><span>Bootstrap, become a local favourite, scale operations, then build a Micro Empire.</span></li><li><b>Make irreversible decisions</b><span>Major events test cash, reputation, independence and loyalty.</span></li><li><b>Protect your cash</b><span>Staff, supply, rent and competition compound across thirty days.</span></li><li><b>Win by Day 30</b><span>Finish above $15,000 cash, 75 reputation and 100 customers.</span></li></ol>
         <button className="primary" onClick={() => setShowHelp(false)}>Let’s build</button>
       </div></div>}
     </main>
