@@ -31,6 +31,16 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 - Story history incorporated into the final founder score
 - New long-form victory conditions and campaign ending
 
+## V2.4 intelligence and replayability
+
+- Four agentic advisers for Finance, Growth, People and Operations
+- Context-sensitive recommendations with confidence and trust scores
+- Conflicting advice and cross-adviser trust consequences
+- Founder, Operator and Mogul difficulty modes
+- Difficulty-driven rent, customer-budget and competitor-pressure modifiers
+- Six unlockable achievements with a final campaign showcase
+- Updated founder tutorial and advisory council interface
+
 ## Play
 
 The game is published automatically through GitHub Pages.
