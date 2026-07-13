@@ -41,6 +41,17 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 - Six unlockable achievements with a final campaign showcase
 - Updated founder tutorial and advisory council interface
 
+## V3 Creator & Challenge Edition
+
+- Three complete modes: Founder Campaign, Daily Challenge and Scenario Lab
+- Date-based shared Daily Challenge with locked business, district, difficulty and starting economy
+- Custom campaigns from 7 to 30 days with configurable cash, business, district, difficulty and seed
+- Portable scenario codes that can be copied, shared and imported without accounts
+- Campaign-length-aware progression and victory targets
+- Shareable end-of-run scorecards
+- Installable web-app manifest and offline service worker
+- Release-ready mode selection, creator interface and mobile layouts
+
 ## Play
 
 The game is published automatically through GitHub Pages.
