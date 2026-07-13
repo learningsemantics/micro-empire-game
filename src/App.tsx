@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 
 type BusinessKey = "coffee" | "career" | "agency";
-type Phase = "home" | "select" | "play" | "dayEnd" | "result";
+type DistrictKey = "junction" | "harbour" | "liberty";
+type SegmentKey = "Student" | "Professional" | "Family" | "Tourist" | "Small Business" | "Corporate";
+type Phase = "home" | "select" | "district" | "play" | "dayEnd" | "result";
 
 type GameState = {
   phase: Phase;
   business: BusinessKey | null;
+  district: DistrictKey;
   day: number;
   hour: number;
   cash: number;
@@ -21,7 +24,10 @@ type GameState = {
   speed: number;
   marketing: number;
   decor: number;
-  customer: null | { name: string; order: string; value: number; patience: number };
+  price: number;
+  offer: number;
+  segmentSales: Record<SegmentKey, number>;
+  customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string };
   message: string;
   event: string;
   dailyRevenue: number;
@@ -42,10 +48,30 @@ const ORDERS: Record<BusinessKey, string[]> = {
   agency: ["Lead workflow", "Inbox agent", "Client dashboard", "AI process audit"],
 };
 
+const DISTRICTS = {
+  junction: { name: "The Junction", icon: "◈", rent: 85, traffic: "Steady", tone: "Community-driven", description: "Families, students and loyal locals. Lower rent rewards patient brand building.", segments: ["Family", "Student", "Professional"] as SegmentKey[] },
+  harbour: { name: "Harbourfront", icon: "≈", rent: 145, traffic: "High", tone: "Seasonal & social", description: "Tourists and professionals bring volume, but rent and expectations are higher.", segments: ["Tourist", "Professional", "Corporate"] as SegmentKey[] },
+  liberty: { name: "Liberty Village", icon: "▦", rent: 125, traffic: "Targeted", tone: "Business-focused", description: "Startups, corporate teams and ambitious professionals value premium offers.", segments: ["Small Business", "Corporate", "Professional"] as SegmentKey[] },
+} as const;
+
+const SEGMENTS: Record<SegmentKey, { icon: string; budget: number; patience: number }> = {
+  Student: { icon: "◒", budget: 120, patience: 3 }, Professional: { icon: "◆", budget: 220, patience: 3 },
+  Family: { icon: "⌂", budget: 170, patience: 4 }, Tourist: { icon: "◎", budget: 190, patience: 2 },
+  "Small Business": { icon: "▣", budget: 330, patience: 3 }, Corporate: { icon: "▲", budget: 460, patience: 2 },
+};
+
+const OFFERS: Record<BusinessKey, { names: string[]; notes: string[] }> = {
+  coffee: { names: ["Quick Serve", "House Ritual", "Artisan Reserve"], notes: ["Low price · fast volume", "Balanced margin and loyalty", "Premium quality · higher cost"] },
+  career: { names: ["Express Review", "Coaching Session", "Career Transformation"], notes: ["Fast, tactical support", "Balanced guidance", "Premium outcome package"] },
+  agency: { names: ["Automation Sprint", "Managed Workflow", "Enterprise Control"], notes: ["Defined, fast project", "Recurring operational value", "Premium governed delivery"] },
+};
+
 const initialState: GameState = {
-  phase: "home", business: null, day: 1, hour: 9, cash: 1000, reputation: 50,
+  phase: "home", business: null, district: "junction", day: 1, hour: 9, cash: 1000, reputation: 50,
   capacity: 8, maxCapacity: 8, served: 0, missed: 0, revenue: 0, expenses: 0,
-  speed: 0, marketing: 0, decor: 0, customer: null, message: "Your neighbourhood is waiting.",
+  speed: 0, marketing: 0, decor: 0, price: 1, offer: 1,
+  segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
+  customer: null, message: "Your neighbourhood is waiting.",
   event: "", dailyRevenue: 0, dailyExpenses: 0, quests: [false, false, false],
 };
 
@@ -62,7 +88,10 @@ export default function Home() {
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const saved = localStorage.getItem("micro-empire-save");
-      if (saved) try { setGame(JSON.parse(saved)); } catch { /* ignore invalid save */ }
+      if (saved) try {
+        const prior = JSON.parse(saved);
+        setGame({ ...initialState, ...prior, segmentSales: { ...initialState.segmentSales, ...(prior.segmentSales || {}) }, customer: null, phase: "home" });
+      } catch { /* ignore invalid save */ }
       setHydrated(true);
     }, 0);
     return () => window.clearTimeout(timer);
@@ -89,14 +118,21 @@ export default function Home() {
     const max = selected === "coffee" ? 10 : selected === "career" ? 7 : 5;
     setGame({ ...initialState, phase: "play", business: selected, cash: 1000 - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
-      customer: makeCustomer(selected, b.unit, 50), event: "Opening Day: neighbours are curious (+foot traffic)" });
+      district: game.district, customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setShowHelp(true);
   }
 
-  function makeCustomer(key: BusinessKey, base: number, rep: number) {
-    const value = Math.round(base * (0.9 + Math.random() * .3) * (1 + Math.max(0, rep - 50) / 250));
-    return { name: PEOPLE[Math.floor(Math.random() * PEOPLE.length)], order: ORDERS[key][Math.floor(Math.random() * ORDERS[key].length)], value, patience: 3 };
+  function makeCustomer(key: BusinessKey, base: number, rep: number, district: DistrictKey, price: number, offer: number) {
+    const local = DISTRICTS[district].segments;
+    const all = Object.keys(SEGMENTS) as SegmentKey[];
+    const segment = Math.random() < .78 ? local[Math.floor(Math.random() * local.length)] : all[Math.floor(Math.random() * all.length)];
+    const profile = SEGMENTS[segment];
+    const offerMultiplier = [.82, 1, 1.28][offer];
+    const value = Math.round(base * price * offerMultiplier * (0.92 + Math.random() * .16) * (1 + Math.max(0, rep - 50) / 300));
+    const budget = Math.round(profile.budget * (key === "coffee" ? .75 : key === "career" ? 1.15 : 1.8));
+    const fit = local.includes(segment) ? "Strong local fit" : "Visiting segment";
+    return { name: PEOPLE[Math.floor(Math.random() * PEOPLE.length)], order: ORDERS[key][Math.floor(Math.random() * ORDERS[key].length)], value, budget, patience: profile.patience, segment, fit };
   }
 
   function advance(mutator: (g: GameState) => GameState) {
@@ -112,7 +148,7 @@ export default function Home() {
       }
       const newHour = next.hour + 1;
       next = { ...next, hour: newHour, customer };
-      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation);
+      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer);
       if (newHour >= 17) return closeDay(next);
       return updateQuests(next);
     });
@@ -126,12 +162,19 @@ export default function Home() {
     if (!game.customer || game.capacity <= 0) return;
     advance(g => {
       if (!g.customer) return g;
+      if (g.customer.value > g.customer.budget * 1.15) {
+        return { ...g, reputation: clamp(g.reputation - 2, 0, 100), missed: g.missed + 1,
+          message: `${g.customer.name} declined—${money(g.customer.value)} exceeded their ${g.customer.segment.toLowerCase()} budget.`, customer: null };
+      }
       const bonus = 1 + g.decor * .08;
       const earned = Math.round(g.customer.value * bonus);
-      const rep = 2 + g.speed;
+      const operatingCost = [4, 11, 24][g.offer] * (g.business === "coffee" ? 1 : g.business === "career" ? 2 : 4);
+      const rep = [1, 3, 5][g.offer] + g.speed;
       beep(760);
-      return { ...g, cash: g.cash + earned, revenue: g.revenue + earned, dailyRevenue: g.dailyRevenue + earned,
+      return { ...g, cash: g.cash + earned - operatingCost, revenue: g.revenue + earned, dailyRevenue: g.dailyRevenue + earned,
+        expenses: g.expenses + operatingCost, dailyExpenses: g.dailyExpenses + operatingCost,
         served: g.served + 1, capacity: g.capacity - 1, reputation: clamp(g.reputation + rep, 0, 100),
+        segmentSales: { ...g.segmentSales, [g.customer.segment]: (g.segmentSales[g.customer.segment] || 0) + 1 },
         message: `${g.customer.name} loved it! +${money(earned)} · Reputation +${rep}`, customer: null };
     });
   }
@@ -166,7 +209,7 @@ export default function Home() {
   }
 
   function closeDay(g: GameState): GameState {
-    const rent = 90 + g.day * 10;
+    const rent = DISTRICTS[g.district].rent + g.day * 10;
     const cash = g.cash - rent;
     const expenses = g.expenses + rent;
     const dailyExpenses = g.dailyExpenses + rent;
@@ -187,13 +230,18 @@ export default function Home() {
     setGame(g => {
       const next = ev.apply({ ...g, day: g.day + 1, hour: 9, phase: "play", event: ev.text, dailyRevenue: 0, dailyExpenses: 0,
         message: `Day ${g.day + 1} begins. ${ev.text}` });
-      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation);
+      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer);
       return next;
     });
     beep(650);
   }
 
   function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); beep(400); }
+
+  function adjustPrice(delta: number) {
+    setGame(g => ({ ...g, price: clamp(Math.round((g.price + delta) * 10) / 10, .7, 1.5), message: "Pricing updated. Watch how each customer segment responds." }));
+    beep(540);
+  }
 
   if (!hydrated) return <main className="loading">Opening your neighbourhood…</main>;
 
@@ -241,8 +289,29 @@ export default function Home() {
               </button>;
             })}
           </div>
-          <button className="primary" onClick={startBusiness}>Open {BUSINESSES[selected].name} <span>→</span></button>
+          <button className="primary" onClick={() => setGame(g => ({ ...g, phase: "district", business: selected }))}>Choose your location <span>→</span></button>
           <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "home" }))}>← Back</button>
+        </section>
+      )}
+
+      {game.phase === "district" && (
+        <section className="district-screen screen">
+          <div className="selection-head"><p className="eyebrow">Toronto opportunity map</p><h2>Choose your neighbourhood</h2><p>Location changes rent, customer mix and the strategy required to win.</p></div>
+          <div className="city-map">
+            <div className="map-water">LAKE ONTARIO</div><div className="map-grid"/>
+            {(Object.keys(DISTRICTS) as DistrictKey[]).map((key, index) => {
+              const d = DISTRICTS[key];
+              return <button key={key} className={`district-pin pin-${index + 1} ${game.district === key ? "selected" : ""}`} onClick={() => setGame(g => ({ ...g, district: key }))}>
+                <i>{d.icon}</i><strong>{d.name}</strong><span>{d.tone}</span>
+              </button>;
+            })}
+          </div>
+          <div className="district-detail">
+            <div><p className="eyebrow">Selected district</p><h3>{DISTRICTS[game.district].name}</h3><p>{DISTRICTS[game.district].description}</p></div>
+            <dl><div><dt>Daily rent</dt><dd>{money(DISTRICTS[game.district].rent)}</dd></div><div><dt>Foot traffic</dt><dd>{DISTRICTS[game.district].traffic}</dd></div><div><dt>Core customers</dt><dd>{DISTRICTS[game.district].segments.join(" · ")}</dd></div></dl>
+          </div>
+          <button className="primary" onClick={startBusiness}>Open in {DISTRICTS[game.district].name} <span>→</span></button>
+          <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "select" }))}>← Change business</button>
         </section>
       )}
 
@@ -251,6 +320,7 @@ export default function Home() {
           <aside className="left-panel">
             <p className="eyebrow">{business.icon} {business.name}</p>
             <h2>Day {game.day}</h2>
+            <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name}<small>{money(DISTRICTS[game.district].rent + game.day * 10)} rent due today</small></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
               <Quest done={game.quests[0]} label="Serve 5 customers" progress={`${Math.min(game.served, 5)}/5`} />
@@ -258,13 +328,14 @@ export default function Home() {
               <Quest done={game.quests[2]} label="Earn $3,000 revenue" progress={`${money(Math.min(game.revenue, 3000))}/$3,000`} />
             </div>
             <div className="ledger"><span>Total revenue <b>{money(game.revenue)}</b></span><span>Total expenses <b>{money(game.expenses)}</b></span><span>Customers served <b>{game.served}</b></span></div>
+            <div className="segment-ledger"><h3>Customer mix</h3>{Object.entries(game.segmentSales).filter(([,count]) => count > 0).map(([segment,count]) => <span key={segment}><b>{SEGMENTS[segment as SegmentKey].icon} {segment}</b><i>{count}</i></span>)}{game.served === 0 && <small>No sales yet—learn who responds.</small>}</div>
           </aside>
 
           <div className="world-panel">
             <Neighbourhood active={game.business!} people={Math.min(10, 3 + game.marketing + Math.floor(game.reputation / 20))}/>
             <div className="store-sign">{business.icon} {business.name}<small>OPEN · {game.capacity}/{game.maxCapacity} {business.stock}</small></div>
             {game.customer ? <div className="customer-card">
-              <div className="avatar">{game.customer.name[0]}</div><div><small>NEW CUSTOMER</small><strong>{game.customer.name}</strong><span>{game.customer.order} · {money(game.customer.value)}</span>
+              <div className="avatar">{game.customer.name[0]}</div><div><small>{SEGMENTS[game.customer.segment].icon} {game.customer.segment.toUpperCase()} · {game.customer.fit}</small><strong>{game.customer.name}</strong><span>{game.customer.order} · Price {money(game.customer.value)} · Budget {money(game.customer.budget)}</span>
               <div className="patience"><i style={{ width: `${game.customer.patience / 3 * 100}%` }}/></div></div>
             </div> : <div className="customer-card quiet">Waiting for the next customer…</div>}
             <div className="toast" aria-live="polite">{game.message}</div>
@@ -272,6 +343,11 @@ export default function Home() {
 
           <aside className="action-panel">
             <h3>Take action</h3><p>Each action uses one hour.</p>
+            <div className="strategy-box"><h4>Market strategy</h4>
+              <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
+              <label>Operating model<select value={game.offer} onChange={e => setGame(g => ({ ...g, offer: Number(e.target.value), message: `${OFFERS[g.business!].names[Number(e.target.value)]} is now your operating model.` }))}>{OFFERS[game.business!].names.map((name: string,i: number) => <option key={name} value={i}>{name}</option>)}</select></label>
+              <small>{OFFERS[game.business!].notes[game.offer]}</small>
+            </div>
             <button className="action serve" onClick={serve} disabled={!game.customer || game.capacity <= 0}><b>Serve customer</b><span>Earn revenue · build reputation</span></button>
             <button className="action" onClick={restock} disabled={game.capacity === game.maxCapacity}><b>Restock</b><span>Refill {business.stock}</span></button>
             <button className="action" onClick={promote}><b>Local marketing</b><span>{money(75 + game.marketing * 25)} · reputation +7</span></button>
@@ -307,7 +383,7 @@ export default function Home() {
 
       {showHelp && <div className="help-backdrop" role="dialog" aria-modal="true" aria-label="How to play"><div className="help-card">
         <button className="close" onClick={() => setShowHelp(false)}>×</button><p className="eyebrow">Founder field guide</p><h2>Build wisely. Move quickly.</h2>
-        <ol><li><b>Serve customers</b><span>Before their patience runs out. Every action advances one hour.</span></li><li><b>Protect your cash</b><span>Restock, market and upgrade—but daily rent is due at closing.</span></li><li><b>Grow reputation</b><span>Happy customers bring more valuable opportunities.</span></li><li><b>Win by Day 7</b><span>Finish above $5,000 cash, 70 reputation and 30 customers.</span></li></ol>
+        <ol><li><b>Read the market</b><span>Every district attracts a different customer mix with distinct budgets.</span></li><li><b>Set price and offer</b><span>Premium models earn more reputation but cost more to deliver.</span></li><li><b>Protect your cash</b><span>Restock, market and upgrade—but district rent is due at closing.</span></li><li><b>Win by Day 7</b><span>Finish above $5,000 cash, 70 reputation and 30 customers.</span></li></ol>
         <button className="primary" onClick={() => setShowHelp(false)}>Let’s build</button>
       </div></div>}
     </main>
