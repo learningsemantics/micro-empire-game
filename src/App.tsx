@@ -8,9 +8,10 @@ type SegmentKey = "Student" | "Professional" | "Family" | "Tourist" | "Small Bus
 type SupplierKey = "budget" | "local" | "premium";
 type DifficultyKey = "founder" | "operator" | "mogul";
 type AdviserKey = "finance" | "marketing" | "people" | "operations";
+type GameMode = "campaign" | "daily" | "custom";
 type StaffMember = { id: number; name: string; role: string; skill: number; morale: number; salary: number };
 type Competitor = { name: string; price: number; reputation: number; share: number };
-type Phase = "home" | "select" | "district" | "play" | "dayEnd" | "decision" | "result";
+type Phase = "home" | "modes" | "scenario" | "select" | "district" | "play" | "dayEnd" | "decision" | "result";
 
 type GameState = {
   phase: Phase;
@@ -42,6 +43,10 @@ type GameState = {
   difficulty: DifficultyKey;
   adviserTrust: Record<AdviserKey, number>;
   achievements: string[];
+  mode: GameMode;
+  campaignDays: number;
+  scenarioName: string;
+  seed: number;
   segmentSales: Record<SegmentKey, number>;
   customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string };
   message: string;
@@ -93,7 +98,6 @@ const STAFF_ROLES: Record<BusinessKey, string[]> = {
   agency: ["Automation Builder", "Account Strategist", "Governance Analyst"],
 };
 
-const TOTAL_DAYS = 30;
 const STAGES = [
   { name: "Bootstrap", days: "Days 1–7", icon: "●", note: "Prove customers will pay." },
   { name: "Local Favourite", days: "Days 8–14", icon: "★", note: "Build loyalty and a capable team." },
@@ -131,6 +135,7 @@ const initialState: GameState = {
   supplier: "local", staff: [], dailyCogs: 0, dailyPayroll: 0,
   stageRewarded: 0, decision: null, storyLog: [],
   difficulty: "operator", adviserTrust: { finance: 50, marketing: 50, people: 50, operations: 50 }, achievements: [],
+  mode: "campaign", campaignDays: 30, scenarioName: "The 30-Day Founder Campaign", seed: 2026,
   competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
@@ -147,6 +152,8 @@ export default function Home() {
   const [selected, setSelected] = useState<BusinessKey>("coffee");
   const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council">("trade");
   const [hydrated, setHydrated] = useState(false);
+  const [scenarioDraft, setScenarioDraft] = useState({ name: "My Founder Challenge", cash: 1000, days: 20, difficulty: "operator" as DifficultyKey, business: "coffee" as BusinessKey, district: "junction" as DistrictKey, seed: 4242 });
+  const [shareStatus, setShareStatus] = useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -160,12 +167,15 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => { if (hydrated) localStorage.setItem("micro-empire-save", JSON.stringify(game)); }, [game, hydrated]);
+  useEffect(() => { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/micro-empire-game/sw.js").catch(() => undefined); }, []);
 
   const business = game.business ? BUSINESSES[game.business] : null;
   const clock = `${game.hour > 12 ? game.hour - 12 : game.hour}:00 ${game.hour >= 12 ? "PM" : "AM"}`;
-  const stageIndex = game.day <= 7 ? 0 : game.day <= 14 ? 1 : game.day <= 22 ? 2 : 3;
+  const stageIndex = Math.min(3, Math.floor(((game.day - 1) / game.campaignDays) * 4));
   const score = Math.round(game.cash * .35 + game.reputation * 35 + game.served * 28 + playerMarketShare() * 20 + game.storyLog.length * 180);
   const rating = score >= 16000 ? "Empire Builder" : score >= 11000 ? "Micro-SaaS Master" : score >= 6500 ? "Growth Operator" : "Resilient Founder";
+  const winCash = Math.round(15000 * game.campaignDays / 30);
+  const winCustomers = Math.round(100 * game.campaignDays / 30);
 
   function beep(tone = 520) {
     if (!sound) return;
@@ -180,9 +190,10 @@ export default function Home() {
   function startBusiness() {
     const b = BUSINESSES[selected];
     const max = selected === "coffee" ? 10 : selected === "career" ? 7 : 5;
-    setGame({ ...initialState, phase: "play", business: selected, cash: 1000 - b.cost, capacity: max, maxCapacity: max,
+    setGame({ ...initialState, phase: "play", business: selected, cash: game.cash - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
-      district: game.district, difficulty: game.difficulty, customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
+      district: game.district, difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
+      customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setShowHelp(true);
   }
@@ -290,7 +301,7 @@ export default function Home() {
     const cash = g.cash - rent - payroll;
     const expenses = g.expenses + rent + payroll;
     const dailyExpenses = g.dailyExpenses + rent + payroll;
-    const finished = g.day >= TOTAL_DAYS || cash < 0;
+    const finished = g.day >= g.campaignDays || cash < 0;
     const playerStrength = g.reputation / Math.max(.7, g.price);
     const rival = DIFFICULTIES[g.difficulty].rival;
     const competitors = g.competitors.map((c, i) => ({ ...c, price: clamp(Math.round((c.price + (i ? -.05 : .04) * rival) * 100) / 100, .75, 1.35),
@@ -313,7 +324,7 @@ export default function Home() {
     setGame(current => {
       const g = base || current;
       const nextDayNumber = g.day + 1;
-      const nextStage = nextDayNumber <= 7 ? 0 : nextDayNumber <= 14 ? 1 : nextDayNumber <= 22 ? 2 : 3;
+      const nextStage = Math.min(3, Math.floor(((nextDayNumber - 1) / g.campaignDays) * 4));
       const stageUp = nextStage > g.stageRewarded;
       const next = ev.apply({ ...g, day: nextDayNumber, hour: 9, phase: "play", event: stageUp ? `${STAGES[nextStage].name} unlocked! $750 growth grant and +3 capacity.` : ev.text,
         dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0, decision: null,
@@ -348,6 +359,24 @@ export default function Home() {
   }
 
   function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); beep(400); }
+
+  function prepareDailyChallenge() {
+    const dateKey = Number(new Date().toISOString().slice(0,10).replaceAll("-",""));
+    const businesses = Object.keys(BUSINESSES) as BusinessKey[]; const districts = Object.keys(DISTRICTS) as DistrictKey[];
+    const businessKey = businesses[dateKey % businesses.length]; const district = districts[Math.floor(dateKey / 3) % districts.length];
+    setSelected(businessKey);
+    setGame({ ...initialState, phase:"district", business:businessKey, district, difficulty:"mogul", mode:"daily", campaignDays:14, cash:850, scenarioName:`Daily Challenge · ${new Date().toLocaleDateString("en-CA")}`, seed:dateKey });
+  }
+
+  function launchCustomScenario() {
+    setSelected(scenarioDraft.business);
+    setGame({ ...initialState, phase:"district", business:scenarioDraft.business, district:scenarioDraft.district, difficulty:scenarioDraft.difficulty, mode:"custom", campaignDays:scenarioDraft.days, cash:scenarioDraft.cash, scenarioName:scenarioDraft.name, seed:scenarioDraft.seed });
+  }
+
+  function scenarioCode() { return btoa(unescape(encodeURIComponent(JSON.stringify(scenarioDraft)))); }
+  function shareScenario() { navigator.clipboard?.writeText(scenarioCode()); setShareStatus("Challenge code copied"); window.setTimeout(()=>setShareStatus(""),1800); }
+  function importScenario(code: string) { try { const data=JSON.parse(decodeURIComponent(escape(atob(code.trim())))); setScenarioDraft({ ...scenarioDraft, ...data }); setShareStatus("Challenge imported"); } catch { setShareStatus("Invalid challenge code"); } }
+  function shareScore() { const text=`Micro Empire · ${game.scenarioName}\nScore ${score.toLocaleString()} · ${rating}\n${money(game.cash)} cash · ${game.reputation} reputation · ${game.served} customers\nhttps://learningsemantics.github.io/micro-empire-game/`; navigator.clipboard?.writeText(text); setShareStatus("Scorecard copied"); }
 
   function adjustPrice(delta: number) {
     setGame(g => ({ ...g, price: clamp(Math.round((g.price + delta) * 10) / 10, .7, 1.5), message: "Pricing updated. Watch how each customer segment responds." }));
@@ -407,7 +436,7 @@ export default function Home() {
           <span>MICRO</span><strong>EMPIRE</strong>
         </button>
         <div className="hud" aria-label="Game status">
-          <Stat icon="▣" label="Day" value={`${game.day} / ${TOTAL_DAYS}`} />
+          <Stat icon="▣" label="Day" value={`${game.day} / ${game.campaignDays}`} />
           <Stat icon="$" label="Cash" value={money(game.cash)} danger={game.cash < 250} />
           <Stat icon="★" label="Reputation" value={`${game.reputation}`} />
           <Stat icon="◷" label="Time" value={clock} />
@@ -421,13 +450,36 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">The 30-Day Founder Campaign</div>
-            <p className="lede">One storefront. Four growth stages. Thirty days to build a neighbourhood institution.</p>
-            <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "select" }))}>Start your empire <span>→</span></button>
+            <div className="ribbon">V3 · Creator &amp; Challenge Edition</div>
+            <p className="lede">Build a company, master the daily challenge, or design a scenario for another founder.</p>
+            <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "modes" }))}>Choose game mode <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
           <Neighbourhood active={game.business || "coffee"} people={6}/>
         </section>
+      )}
+
+      {game.phase === "modes" && (
+        <section className="mode-screen screen"><div className="selection-head"><p className="eyebrow">Micro Empire V3</p><h2>How will you build?</h2><p>Every mode uses the complete economy, staff, supply, competition and agentic-adviser systems.</p></div>
+          <div className="mode-grid">
+            <button onClick={() => setGame(g=>({...initialState,phase:"select",mode:"campaign",campaignDays:30,scenarioName:"The 30-Day Founder Campaign"}))}><i>◆</i><small>CORE EXPERIENCE</small><b>Founder Campaign</b><span>Thirty days, four growth stages and five consequential story decisions.</span><em>30 days · configurable difficulty</em></button>
+            <button onClick={prepareDailyChallenge}><i>◷</i><small>SAME FOR EVERY PLAYER</small><b>Daily Challenge</b><span>A fixed business, district and Mogul economy generated from today’s date.</span><em>14 days · share your final score</em></button>
+            <button onClick={() => setGame(g=>({...g,phase:"scenario"}))}><i>⚙</i><small>CREATE &amp; SHARE</small><b>Scenario Lab</b><span>Design campaign rules and generate a portable challenge code.</span><em>Custom cash · length · market</em></button>
+          </div><button className="text-button" onClick={() => setGame(g=>({...g,phase:"home"}))}>← Home</button>
+        </section>
+      )}
+
+      {game.phase === "scenario" && (
+        <section className="scenario-screen screen"><div className="scenario-builder"><p className="eyebrow">Scenario laboratory</p><h2>Design a founder challenge</h2><div className="builder-grid">
+          <label>Scenario name<input value={scenarioDraft.name} onChange={e=>setScenarioDraft({...scenarioDraft,name:e.target.value})}/></label>
+          <label>Starting cash<input type="number" min="500" max="5000" step="100" value={scenarioDraft.cash} onChange={e=>setScenarioDraft({...scenarioDraft,cash:Number(e.target.value)})}/></label>
+          <label>Campaign days<input type="range" min="7" max="30" value={scenarioDraft.days} onChange={e=>setScenarioDraft({...scenarioDraft,days:Number(e.target.value)})}/><b>{scenarioDraft.days} days</b></label>
+          <label>Difficulty<select value={scenarioDraft.difficulty} onChange={e=>setScenarioDraft({...scenarioDraft,difficulty:e.target.value as DifficultyKey})}>{(Object.keys(DIFFICULTIES) as DifficultyKey[]).map(k=><option key={k} value={k}>{DIFFICULTIES[k].name}</option>)}</select></label>
+          <label>Business<select value={scenarioDraft.business} onChange={e=>setScenarioDraft({...scenarioDraft,business:e.target.value as BusinessKey})}>{(Object.keys(BUSINESSES) as BusinessKey[]).map(k=><option key={k} value={k}>{BUSINESSES[k].name}</option>)}</select></label>
+          <label>District<select value={scenarioDraft.district} onChange={e=>setScenarioDraft({...scenarioDraft,district:e.target.value as DistrictKey})}>{(Object.keys(DISTRICTS) as DistrictKey[]).map(k=><option key={k} value={k}>{DISTRICTS[k].name}</option>)}</select></label>
+          <label>Challenge seed<input type="number" value={scenarioDraft.seed} onChange={e=>setScenarioDraft({...scenarioDraft,seed:Number(e.target.value)})}/></label>
+        </div><div className="code-box"><textarea aria-label="Challenge code" value={scenarioCode()} readOnly/><button onClick={shareScenario}>Copy code</button></div><div className="import-box"><input id="import-code" placeholder="Paste a challenge code"/><button onClick={()=>importScenario((document.getElementById("import-code") as HTMLInputElement).value)}>Import</button></div>{shareStatus&&<p className="share-status">{shareStatus}</p>}
+        <button className="primary" onClick={launchCustomScenario}>Launch scenario <span>→</span></button><button className="text-button" onClick={()=>setGame(g=>({...g,phase:"modes"}))}>← Game modes</button></div></section>
       )}
 
       {game.phase === "select" && (
@@ -451,12 +503,13 @@ export default function Home() {
       {game.phase === "district" && (
         <section className="district-screen screen">
           <div className="selection-head"><p className="eyebrow">Toronto opportunity map</p><h2>Choose your neighbourhood</h2><p>Location changes rent, customer mix and the strategy required to win.</p></div>
-          <div className="difficulty-row">{(Object.keys(DIFFICULTIES) as DifficultyKey[]).map(key => <button key={key} className={game.difficulty === key ? "selected" : ""} onClick={() => setGame(g=>({...g,difficulty:key}))}><i>{DIFFICULTIES[key].icon}</i><b>{DIFFICULTIES[key].name}</b><span>{DIFFICULTIES[key].note}</span></button>)}</div>
+          {game.mode === "daily" && <p className="daily-lock">◷ Daily rules are locked so every player receives the same challenge.</p>}
+          <div className="difficulty-row">{(Object.keys(DIFFICULTIES) as DifficultyKey[]).map(key => <button key={key} disabled={game.mode === "daily"} className={game.difficulty === key ? "selected" : ""} onClick={() => setGame(g=>({...g,difficulty:key}))}><i>{DIFFICULTIES[key].icon}</i><b>{DIFFICULTIES[key].name}</b><span>{DIFFICULTIES[key].note}</span></button>)}</div>
           <div className="city-map">
             <div className="map-water">LAKE ONTARIO</div><div className="map-grid"/>
             {(Object.keys(DISTRICTS) as DistrictKey[]).map((key, index) => {
               const d = DISTRICTS[key];
-              return <button key={key} className={`district-pin pin-${index + 1} ${game.district === key ? "selected" : ""}`} onClick={() => setGame(g => ({ ...g, district: key }))}>
+              return <button key={key} disabled={game.mode === "daily"} className={`district-pin pin-${index + 1} ${game.district === key ? "selected" : ""}`} onClick={() => setGame(g => ({ ...g, district: key }))}>
                 <i>{d.icon}</i><strong>{d.name}</strong><span>{d.tone}</span>
               </button>;
             })}
@@ -475,7 +528,7 @@ export default function Home() {
           <aside className="left-panel">
             <p className="eyebrow">{business.icon} {business.name}</p>
             <h2>Day {game.day}</h2>
-            <div className="stage-card"><i>{STAGES[stageIndex].icon}</i><span><small>{STAGES[stageIndex].days}</small><b>{STAGES[stageIndex].name}</b><em>{STAGES[stageIndex].note}</em></span></div>
+            <div className="stage-card"><i>{STAGES[stageIndex].icon}</i><span><small>{game.mode.toUpperCase()} · {game.scenarioName}</small><b>{STAGES[stageIndex].name}</b><em>{STAGES[stageIndex].note}</em></span></div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} · {DIFFICULTIES[game.difficulty].name}<small>{money(Math.round((DISTRICTS[game.district].rent + game.day * 10) * DIFFICULTIES[game.difficulty].rent))} rent due today</small></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
@@ -539,12 +592,13 @@ export default function Home() {
 
       {game.phase === "result" && (
         <section className="modal-screen"><div className="report-card final-card">
-          <div className="trophy">{game.cash >= 15000 && game.reputation >= 75 && game.served >= 100 ? "🏆" : "✦"}</div>
-          <p className="eyebrow">Thirty-day founder report</p><h2>{rating}</h2>
-          <p>{game.cash >= 15000 && game.reputation >= 75 && game.served >= 100 ? "You built a neighbourhood institution ready for its next market." : "Thirty days changed the operator—and the next campaign starts with hard-earned judgment."}</p>
+          <div className="trophy">{game.cash >= winCash && game.reputation >= 75 && game.served >= winCustomers ? "🏆" : "✦"}</div>
+          <p className="eyebrow">{game.scenarioName} · Final report</p><h2>{rating}</h2>
+          <p>{game.cash >= winCash && game.reputation >= 75 && game.served >= winCustomers ? "You built a neighbourhood institution ready for its next market." : "The campaign changed the operator—and the next run starts with hard-earned judgment."}</p>
           <div className="score">{score.toLocaleString()}<small>Founder score</small></div>
           <div className="report-numbers"><span><small>Ending cash</small><b>{money(game.cash)}</b></span><span><small>Reputation</small><b>{game.reputation}</b></span><span><small>Served</small><b>{game.served}</b></span><span><small>Quests</small><b>{game.quests.filter(Boolean).length}/3</b></span></div>
           <div className="achievement-grid">{Object.entries(ACHIEVEMENTS).map(([id,a]) => <div key={id} className={game.achievements.includes(id) ? "unlocked" : "locked"}><i>{a.icon}</i><b>{a.name}</b><small>{a.note}</small></div>)}</div>
+          <button className="score-share" onClick={shareScore}>Share scorecard</button>{shareStatus&&<p className="share-status">{shareStatus}</p>}
           <button className="primary" onClick={reset}>Build another empire <span>↻</span></button>
         </div></section>
       )}
