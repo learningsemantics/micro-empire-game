@@ -21,6 +21,16 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 - Daily profit-and-loss statement covering revenue, delivery costs, payroll, rent and net result
 - Tabbed founder console for trade, team, supply and market intelligence
 
+## V2.3 campaign systems
+
+- Expanded 30-day founder campaign
+- Four progression stages: Bootstrap, Local Favourite, Growth Business and Micro Empire
+- Growth grants, capacity increases and reputation rewards at stage transitions
+- Five consequential narrative events covering customer crises, community, corporate contracts, talent retention and investment
+- Irreversible choices with financial, operational and reputational consequences
+- Story history incorporated into the final founder score
+- New long-form victory conditions and campaign ending
+
 ## Play
 
 The game is published automatically through GitHub Pages.
