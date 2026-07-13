@@ -5,6 +5,9 @@ import { useEffect, useState } from "react";
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
 type SegmentKey = "Student" | "Professional" | "Family" | "Tourist" | "Small Business" | "Corporate";
+type SupplierKey = "budget" | "local" | "premium";
+type StaffMember = { id: number; name: string; role: string; skill: number; morale: number; salary: number };
+type Competitor = { name: string; price: number; reputation: number; share: number };
 type Phase = "home" | "select" | "district" | "play" | "dayEnd" | "result";
 
 type GameState = {
@@ -26,6 +29,11 @@ type GameState = {
   decor: number;
   price: number;
   offer: number;
+  supplier: SupplierKey;
+  staff: StaffMember[];
+  competitors: Competitor[];
+  dailyCogs: number;
+  dailyPayroll: number;
   segmentSales: Record<SegmentKey, number>;
   customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string };
   message: string;
@@ -66,10 +74,23 @@ const OFFERS: Record<BusinessKey, { names: string[]; notes: string[] }> = {
   agency: { names: ["Automation Sprint", "Managed Workflow", "Enterprise Control"], notes: ["Defined, fast project", "Recurring operational value", "Premium governed delivery"] },
 };
 
+const SUPPLIERS = {
+  budget: { name: "Metro Value Supply", cost: .72, quality: -1, reliability: 72, note: "Lowest cost · occasional shortfall" },
+  local: { name: "Ontario Local Co-op", cost: 1, quality: 1, reliability: 91, note: "Balanced cost · community reputation" },
+  premium: { name: "Northstar Premium", cost: 1.35, quality: 3, reliability: 100, note: "Highest quality · guaranteed fulfilment" },
+} as const;
+
+const STAFF_ROLES: Record<BusinessKey, string[]> = {
+  coffee: ["Barista", "Shift Lead", "Community Host"], career: ["Career Coach", "Résumé Specialist", "Client Coordinator"],
+  agency: ["Automation Builder", "Account Strategist", "Governance Analyst"],
+};
+
 const initialState: GameState = {
   phase: "home", business: null, district: "junction", day: 1, hour: 9, cash: 1000, reputation: 50,
   capacity: 8, maxCapacity: 8, served: 0, missed: 0, revenue: 0, expenses: 0,
   speed: 0, marketing: 0, decor: 0, price: 1, offer: 1,
+  supplier: "local", staff: [], dailyCogs: 0, dailyPayroll: 0,
+  competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
   event: "", dailyRevenue: 0, dailyExpenses: 0, quests: [false, false, false],
@@ -83,6 +104,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [sound, setSound] = useState(true);
   const [selected, setSelected] = useState<BusinessKey>("coffee");
+  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market">("trade");
   const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
@@ -168,11 +190,14 @@ export default function Home() {
       }
       const bonus = 1 + g.decor * .08;
       const earned = Math.round(g.customer.value * bonus);
-      const operatingCost = [4, 11, 24][g.offer] * (g.business === "coffee" ? 1 : g.business === "career" ? 2 : 4);
-      const rep = [1, 3, 5][g.offer] + g.speed;
+      const supplier = SUPPLIERS[g.supplier];
+      const operatingCost = Math.round([4, 11, 24][g.offer] * (g.business === "coffee" ? 1 : g.business === "career" ? 2 : 4) * supplier.cost);
+      const staffSkill = g.staff.reduce((sum, member) => sum + member.skill, 0);
+      const rep = Math.max(1, [1, 3, 5][g.offer] + g.speed + supplier.quality + Math.floor(staffSkill / 3));
       beep(760);
       return { ...g, cash: g.cash + earned - operatingCost, revenue: g.revenue + earned, dailyRevenue: g.dailyRevenue + earned,
-        expenses: g.expenses + operatingCost, dailyExpenses: g.dailyExpenses + operatingCost,
+        expenses: g.expenses + operatingCost, dailyExpenses: g.dailyExpenses + operatingCost, dailyCogs: g.dailyCogs + operatingCost,
+        staff: g.staff.map(member => ({ ...member, morale: clamp(member.morale - 2, 20, 100) })),
         served: g.served + 1, capacity: g.capacity - 1, reputation: clamp(g.reputation + rep, 0, 100),
         segmentSales: { ...g.segmentSales, [g.customer.segment]: (g.segmentSales[g.customer.segment] || 0) + 1 },
         message: `${g.customer.name} loved it! +${money(earned)} · Reputation +${rep}`, customer: null };
@@ -189,10 +214,12 @@ export default function Home() {
 
   function restock() {
     const missing = game.maxCapacity - game.capacity;
-    const cost = Math.max(40, missing * (game.business === "coffee" ? 8 : game.business === "career" ? 16 : 28));
+    const supplier = SUPPLIERS[game.supplier];
+    const cost = Math.round(Math.max(40, missing * (game.business === "coffee" ? 8 : game.business === "career" ? 16 : 28)) * supplier.cost);
     if (!missing || game.cash < cost) return;
+    const delivered = Math.random() * 100 <= supplier.reliability ? game.maxCapacity : Math.max(game.capacity + 1, Math.round(game.maxCapacity * .65));
     advance(g => ({ ...g, cash: g.cash - cost, expenses: g.expenses + cost, dailyExpenses: g.dailyExpenses + cost,
-      capacity: g.maxCapacity, message: `${BUSINESSES[g.business!].stock} replenished for ${money(cost)}.` }));
+      dailyCogs: g.dailyCogs + cost, capacity: delivered, message: delivered === g.maxCapacity ? `${supplier.name} delivered in full for ${money(cost)}.` : `${supplier.name} had a shortfall—only ${delivered}/${g.maxCapacity} capacity received.` }));
     beep(460);
   }
 
@@ -210,12 +237,18 @@ export default function Home() {
 
   function closeDay(g: GameState): GameState {
     const rent = DISTRICTS[g.district].rent + g.day * 10;
-    const cash = g.cash - rent;
-    const expenses = g.expenses + rent;
-    const dailyExpenses = g.dailyExpenses + rent;
+    const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
+    const cash = g.cash - rent - payroll;
+    const expenses = g.expenses + rent + payroll;
+    const dailyExpenses = g.dailyExpenses + rent + payroll;
     const finished = g.day >= 7 || cash < 0;
-    return updateQuests({ ...g, cash, expenses, dailyExpenses, customer: null, phase: finished ? "result" : "dayEnd",
-      message: cash < 0 ? "The business ran out of cash." : `Day ${g.day} complete. Rent of ${money(rent)} paid.` });
+    const playerStrength = g.reputation / Math.max(.7, g.price);
+    const competitors = g.competitors.map((c, i) => ({ ...c, price: clamp(Math.round((c.price + (i ? -.05 : .04)) * 100) / 100, .75, 1.35),
+      reputation: clamp(c.reputation + (Math.random() > .45 ? 2 : -1), 25, 95), share: clamp(Math.round(c.share + (c.reputation - g.reputation) / 18), 12, 55) }));
+    const playerShare = clamp(Math.round(100 - competitors.reduce((s,c) => s + c.share, 0) + playerStrength / 12), 10, 65);
+    competitors[0].share = Math.round((100 - playerShare) * .48); competitors[1].share = 100 - playerShare - competitors[0].share;
+    return updateQuests({ ...g, cash, expenses, dailyExpenses, dailyPayroll: payroll, competitors, customer: null, phase: finished ? "result" : "dayEnd",
+      message: cash < 0 ? "The business ran out of cash." : `Day ${g.day} complete. Rent ${money(rent)} · Payroll ${money(payroll)}.` });
   }
 
   function nextDay() {
@@ -228,7 +261,8 @@ export default function Home() {
     ];
     const ev = events[Math.floor(Math.random() * events.length)];
     setGame(g => {
-      const next = ev.apply({ ...g, day: g.day + 1, hour: 9, phase: "play", event: ev.text, dailyRevenue: 0, dailyExpenses: 0,
+      const next = ev.apply({ ...g, day: g.day + 1, hour: 9, phase: "play", event: ev.text, dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0,
+        staff: g.staff.map(member => ({ ...member, morale: clamp(member.morale + 8, 20, 100) })),
         message: `Day ${g.day + 1} begins. ${ev.text}` });
       if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer);
       return next;
@@ -242,6 +276,25 @@ export default function Home() {
     setGame(g => ({ ...g, price: clamp(Math.round((g.price + delta) * 10) / 10, .7, 1.5), message: "Pricing updated. Watch how each customer segment responds." }));
     beep(540);
   }
+
+  function hireStaff() {
+    if (!game.business || game.cash < 150 || game.staff.length >= 3) return;
+    const role = STAFF_ROLES[game.business][game.staff.length];
+    const name = PEOPLE[(game.staff.length + game.day * 2) % PEOPLE.length];
+    const member: StaffMember = { id: Date.now(), name, role, skill: 1, morale: 82, salary: 55 + game.staff.length * 15 };
+    setGame(g => ({ ...g, cash: g.cash - 150, expenses: g.expenses + 150, dailyExpenses: g.dailyExpenses + 150, staff: [...g.staff, member],
+      maxCapacity: g.maxCapacity + 2, capacity: g.capacity + 2, message: `${name} joined as ${role}. Daily payroll is now ${money(g.staff.reduce((s,m) => s + m.salary, 0) + member.salary)}.` }));
+    beep(720);
+  }
+
+  function trainStaff(id: number) {
+    if (game.cash < 110) return;
+    setGame(g => ({ ...g, cash: g.cash - 110, expenses: g.expenses + 110, dailyExpenses: g.dailyExpenses + 110,
+      staff: g.staff.map(m => m.id === id ? { ...m, skill: Math.min(5, m.skill + 1), morale: clamp(m.morale + 7, 20, 100) } : m), message: "Training completed. Service quality and morale improved." }));
+    beep(810);
+  }
+
+  function playerMarketShare() { return clamp(100 - game.competitors.reduce((sum,c) => sum + c.share, 0), 10, 65); }
 
   if (!hydrated) return <main className="loading">Opening your neighbourhood…</main>;
 
@@ -342,21 +395,25 @@ export default function Home() {
           </div>
 
           <aside className="action-panel">
-            <h3>Take action</h3><p>Each action uses one hour.</p>
-            <div className="strategy-box"><h4>Market strategy</h4>
-              <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
-              <label>Operating model<select value={game.offer} onChange={e => setGame(g => ({ ...g, offer: Number(e.target.value), message: `${OFFERS[g.business!].names[Number(e.target.value)]} is now your operating model.` }))}>{OFFERS[game.business!].names.map((name: string,i: number) => <option key={name} value={i}>{name}</option>)}</select></label>
-              <small>{OFFERS[game.business!].notes[game.offer]}</small>
-            </div>
-            <button className="action serve" onClick={serve} disabled={!game.customer || game.capacity <= 0}><b>Serve customer</b><span>Earn revenue · build reputation</span></button>
-            <button className="action" onClick={restock} disabled={game.capacity === game.maxCapacity}><b>Restock</b><span>Refill {business.stock}</span></button>
-            <button className="action" onClick={promote}><b>Local marketing</b><span>{money(75 + game.marketing * 25)} · reputation +7</span></button>
-            <div className="upgrade-box"><h4>Upgrades</h4>
-              <button onClick={() => upgrade("speed")}><span>⚡ Service</span><b>Lv {game.speed}</b></button>
-              <button onClick={() => upgrade("decor")}><span>✦ Storefront</span><b>Lv {game.decor}</b></button>
-              <button onClick={() => upgrade("capacity")}><span>▦ Capacity</span><b>{game.maxCapacity}</b></button>
-              <small>Upgrade prices rise with each purchase.</small>
-            </div>
+            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
+            {opsTab === "trade" && <>
+              <div className="strategy-box"><h4>Market strategy</h4>
+                <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
+                <label>Operating model<select value={game.offer} onChange={e => setGame(g => ({ ...g, offer: Number(e.target.value), message: `${OFFERS[g.business!].names[Number(e.target.value)]} is now your operating model.` }))}>{OFFERS[game.business!].names.map((name: string,i: number) => <option key={name} value={i}>{name}</option>)}</select></label>
+                <small>{OFFERS[game.business!].notes[game.offer]}</small>
+              </div>
+              <button className="action serve" onClick={serve} disabled={!game.customer || game.capacity <= 0}><b>Serve customer</b><span>Earn revenue · build reputation</span></button>
+              <button className="action" onClick={restock} disabled={game.capacity === game.maxCapacity}><b>Restock</b><span>Via {SUPPLIERS[game.supplier].name}</span></button>
+              <button className="action" onClick={promote}><b>Local marketing</b><span>{money(75 + game.marketing * 25)} · reputation +7</span></button>
+              <div className="upgrade-box"><h4>Upgrades</h4><button onClick={() => upgrade("speed")}><span>⚡ Service</span><b>Lv {game.speed}</b></button><button onClick={() => upgrade("decor")}><span>✦ Storefront</span><b>Lv {game.decor}</b></button><button onClick={() => upgrade("capacity")}><span>▦ Capacity</span><b>{game.maxCapacity}</b></button></div>
+            </>}
+            {opsTab === "team" && <div className="ops-list"><h4>Your team · {money(game.staff.reduce((s,m)=>s+m.salary,0))}/day</h4>
+              {game.staff.map(member => <article key={member.id}><strong>{member.name}</strong><span>{member.role}</span><small>Skill {member.skill}/5 · Morale {member.morale}%</small><button onClick={() => trainStaff(member.id)} disabled={member.skill >= 5}>Train {money(110)}</button></article>)}
+              {game.staff.length < 3 && <button className="action hire" onClick={hireStaff} disabled={game.cash < 150}><b>Hire next specialist</b><span>{money(150)} hiring · daily salary applies</span></button>}
+            </div>}
+            {opsTab === "supply" && <div className="ops-list"><h4>Supplier network</h4>{(Object.keys(SUPPLIERS) as SupplierKey[]).map(key => <button key={key} className={`supplier-card ${game.supplier === key ? "active" : ""}`} onClick={() => setGame(g => ({...g,supplier:key,message:`${SUPPLIERS[key].name} selected as supplier.`}))}><b>{SUPPLIERS[key].name}</b><span>{SUPPLIERS[key].note}</span><small>Reliability {SUPPLIERS[key].reliability}% · Quality {SUPPLIERS[key].quality > 0 ? "+" : ""}{SUPPLIERS[key].quality}</small></button>)}</div>}
+            {opsTab === "market" && <div className="ops-list"><h4>Competitive market</h4><div className="market-share"><i style={{width:`${playerMarketShare()}%`}}/><b>You {playerMarketShare()}%</b></div>
+              {game.competitors.map(c => <article key={c.name}><strong>{c.name}</strong><span>{c.share}% share</span><small>Price {Math.round(c.price*100)}% · Reputation {c.reputation}</small></article>)}<p className="intel">Competitors adjust price and reputation after every day. Your market share responds to both.</p></div>}
           </aside>
         </section>
       )}
@@ -364,7 +421,8 @@ export default function Home() {
       {game.phase === "dayEnd" && (
         <section className="modal-screen"><div className="report-card">
           <p className="eyebrow">Daily close</p><h2>Day {game.day} in the books</h2><p>{game.message}</p>
-          <div className="report-numbers"><span><small>Revenue</small><b>{money(game.dailyRevenue)}</b></span><span><small>Expenses</small><b>{money(game.dailyExpenses)}</b></span><span><small>Cash balance</small><b>{money(game.cash)}</b></span></div>
+          <div className="pnl"><h3>Daily profit &amp; loss</h3><span><i>Revenue</i><b>{money(game.dailyRevenue)}</b></span><span><i>Cost of delivery &amp; supply</i><b>−{money(game.dailyCogs)}</b></span><span><i>Payroll</i><b>−{money(game.dailyPayroll)}</b></span><span><i>Rent &amp; other operating costs</i><b>−{money(Math.max(0, game.dailyExpenses-game.dailyCogs-game.dailyPayroll))}</b></span><span className="net"><i>Net operating result</i><b>{money(game.dailyRevenue-game.dailyExpenses)}</b></span></div>
+          <div className="report-numbers"><span><small>Cash balance</small><b>{money(game.cash)}</b></span><span><small>Your market share</small><b>{playerMarketShare()}%</b></span><span><small>Team morale</small><b>{game.staff.length ? Math.round(game.staff.reduce((s,m)=>s+m.morale,0)/game.staff.length) : "Solo"}</b></span></div>
           <div className="rep-meter"><span>Neighbourhood reputation</span><b>{game.reputation}/100</b><i><u style={{ width: `${game.reputation}%` }}/></i></div>
           <button className="primary" onClick={nextDay}>Begin Day {game.day + 1} <span>→</span></button>
         </div></section>
