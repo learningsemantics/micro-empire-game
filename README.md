@@ -52,6 +52,16 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 - Installable web-app manifest and offline service worker
 - Release-ready mode selection, creator interface and mobile layouts
 
+## V3.1 Validate
+
+- Customer interviews that reveal willingness-to-pay and demand insights
+- Product–market-fit score driven by customer fit, satisfaction and rejection
+- Repeat customers, customer referrals and acquisition-source tracking
+- Structured five-customer experiments for price, segment and offer hypotheses
+- Live validation dashboard with conversion, retention, CAC, LTV, gross margin and LTV/CAC
+- Budget intelligence unlocked through discovery rather than shown automatically
+- Final founder report expanded with validation and unit-economics outcomes
+
 ## Play
 
 The game is published automatically through GitHub Pages.
