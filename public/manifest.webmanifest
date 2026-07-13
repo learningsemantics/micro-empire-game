@@ -1,0 +1,10 @@
+{
+  "name": "Micro Empire: Creator & Challenge Edition",
+  "short_name": "Micro Empire",
+  "description": "Build, operate and grow a neighbourhood business empire.",
+  "start_url": "/micro-empire-game/",
+  "scope": "/micro-empire-game/",
+  "display": "standalone",
+  "background_color": "#0e4b52",
+  "theme_color": "#0e4b52"
+}
