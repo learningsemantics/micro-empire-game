@@ -36,6 +36,7 @@ import {
   xpToNextLevel,
   type FounderProfile,
 } from "./game/progression";
+import { dayPhase, safeVolume, soundscapeFor } from "./game/atmosphere";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -1360,7 +1361,12 @@ function money(n: number) {
 export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
+  const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [sound, setSound] = useState(true);
+  const [ambience, setAmbience] = useState(true);
+  const [masterVolume, setMasterVolume] = useState(0.65);
+  const [reducedMotion, setReducedMotion] = useState(false);
+  const [highContrast, setHighContrast] = useState(false);
   const [selected, setSelected] = useState<BusinessKey>("coffee");
   const [opsTab, setOpsTab] = useState<OpsTab>("trade");
   const [consoleGroup, setConsoleGroup] = useState<ConsoleGroup>("business");
@@ -1465,6 +1471,21 @@ export default function Home() {
       } catch {
         setFounderProfile(EMPTY_PROFILE);
       }
+      try {
+        const audio = JSON.parse(
+          localStorage.getItem("micro-empire-atmosphere") || "{}",
+        );
+        setSound(audio.sound ?? true);
+        setAmbience(audio.ambience ?? true);
+        setMasterVolume(safeVolume(audio.masterVolume ?? 0.65));
+        setReducedMotion(
+          audio.reducedMotion ??
+            window.matchMedia("(prefers-reduced-motion: reduce)").matches,
+        );
+        setHighContrast(audio.highContrast ?? false);
+      } catch {
+        /* defaults remain active */
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -1493,6 +1514,19 @@ export default function Home() {
       return next;
     });
   }, [game.phase, game.runId, hydrated]);
+  useEffect(() => {
+    if (!hydrated) return;
+    localStorage.setItem(
+      "micro-empire-atmosphere",
+      JSON.stringify({
+        sound,
+        ambience,
+        masterVolume,
+        reducedMotion,
+        highContrast,
+      }),
+    );
+  }, [sound, ambience, masterVolume, reducedMotion, highContrast, hydrated]);
   useEffect(() => {
     if (!hydrated || game.phase !== "result" || !game.runId) return;
     setFounderProfile((profile) => {
@@ -1532,6 +1566,26 @@ export default function Home() {
 
   const business = game.business ? BUSINESSES[game.business] : null;
   const clock = `${game.hour > 12 ? game.hour - 12 : game.hour}:00 ${game.hour >= 12 ? "PM" : "AM"}`;
+  const currentDayPhase = dayPhase(game.hour);
+  const currentSoundscape = soundscapeFor(
+    game.weather,
+    game.hour,
+    worldView === "city",
+  );
+  useEffect(() => {
+    if (!hydrated || !sound || !ambience || game.phase !== "play") return;
+    const timer = window.setInterval(() => playAmbientCue(), 9000);
+    return () => window.clearInterval(timer);
+  }, [
+    hydrated,
+    sound,
+    ambience,
+    masterVolume,
+    game.phase,
+    game.weather,
+    game.hour,
+    worldView,
+  ]);
   const stageIndex = Math.min(
     3,
     Math.floor(((game.day - 1) / game.campaignDays) * 4),
@@ -1654,7 +1708,7 @@ export default function Home() {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.frequency.value = tone;
-      gain.gain.setValueAtTime(0.05, ctx.currentTime);
+      gain.gain.setValueAtTime(0.075 * masterVolume, ctx.currentTime);
       gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
       osc.connect(gain);
       gain.connect(ctx.destination);
@@ -1662,6 +1716,30 @@ export default function Home() {
       osc.stop(ctx.currentTime + 0.12);
     } catch {
       /* audio is an enhancement */
+    }
+  }
+  function playAmbientCue() {
+    if (!sound || !ambience) return;
+    try {
+      const Ctx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const ctx = new Ctx();
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.018 * masterVolume, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.4);
+      gain.connect(ctx.destination);
+      currentSoundscape.frequencies.forEach((frequency, index) => {
+        const oscillator = ctx.createOscillator();
+        oscillator.type = index === 0 ? "sine" : "triangle";
+        oscillator.frequency.value = frequency;
+        oscillator.connect(gain);
+        oscillator.start(ctx.currentTime + index * 0.18);
+        oscillator.stop(ctx.currentTime + 1.5 + index * 0.2);
+      });
+    } catch {
+      /* ambience is optional */
     }
   }
   function openConsole(group: ConsoleGroup) {
@@ -4030,7 +4108,7 @@ export default function Home() {
 
   return (
     <main
-      className={`game-shell phase-${game.phase} weather-${game.weather} economy-${game.economy}`}
+      className={`game-shell phase-${game.phase} weather-${game.weather} economy-${game.economy} day-${currentDayPhase} ${reducedMotion ? "reduced-motion" : ""} ${highContrast ? "high-contrast" : ""}`}
     >
       <div className="sky">
         <span className="cloud c1" />
@@ -4070,6 +4148,13 @@ export default function Home() {
         </button>
         <button
           className="icon-button"
+          onClick={() => setShowAtmosphere(true)}
+          aria-label="Audio and atmosphere settings"
+        >
+          ⚙
+        </button>
+        <button
+          className="icon-button"
           onClick={() => setShowHelp(true)}
           aria-label="How to play"
         >
@@ -4086,10 +4171,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.7 · Progression &amp; Rewards</div>
+            <div className="ribbon">V5.8 · Audio &amp; Atmosphere</div>
             <p className="lede">
-              Grow a persistent founder profile, collect badges and unlock new
-              Toronto trials with every completed run.
+              Experience Toronto through changing light, weather-aware
+              soundscapes and accessible atmosphere controls.
             </p>
             <button
               className="primary huge"
@@ -6409,6 +6494,121 @@ export default function Home() {
           <i>✦</i>
           <b>{celebration}</b>
           <span>Keep building your Toronto story.</span>
+        </div>
+      )}
+
+      {game.phase === "play" && ambience && sound && (
+        <button
+          className="now-playing"
+          onClick={playAmbientCue}
+          aria-label="Play current ambience cue"
+        >
+          <i>{currentSoundscape.icon}</i>
+          <span>
+            <small>TORONTO SOUNDSCAPE</small>
+            <b>{currentSoundscape.name}</b>
+          </span>
+          <em>♫</em>
+        </button>
+      )}
+
+      {showAtmosphere && (
+        <div
+          className="help-backdrop atmosphere-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Audio and atmosphere settings"
+        >
+          <div className="help-card atmosphere-card">
+            <button className="close" onClick={() => setShowAtmosphere(false)}>
+              ×
+            </button>
+            <p className="eyebrow">V5.8 atmosphere studio</p>
+            <h2>Make Toronto feel alive.</h2>
+            <div className="soundscape-preview">
+              <i>{currentSoundscape.icon}</i>
+              <span>
+                <small>NOW PLAYING</small>
+                <b>{currentSoundscape.name}</b>
+                <em>
+                  {currentDayPhase} · {WEATHER[game.weather].name}
+                </em>
+              </span>
+              <button onClick={playAmbientCue}>Preview</button>
+            </div>
+            <div className="atmosphere-controls">
+              <label>
+                <span>
+                  <b>Interface sound</b>
+                  <small>Actions, rewards and decisions</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={sound}
+                  onChange={(event) => setSound(event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>
+                  <b>Toronto ambience</b>
+                  <small>Gentle procedural soundscape cues</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={ambience}
+                  onChange={(event) => setAmbience(event.target.checked)}
+                />
+              </label>
+              <label className="volume-control">
+                <span>
+                  <b>Master volume</b>
+                  <small>{Math.round(masterVolume * 100)}%</small>
+                </span>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={masterVolume}
+                  onChange={(event) =>
+                    setMasterVolume(safeVolume(Number(event.target.value)))
+                  }
+                />
+              </label>
+              <label>
+                <span>
+                  <b>Reduced motion</b>
+                  <small>Stops decorative movement and weather animation</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={reducedMotion}
+                  onChange={(event) => setReducedMotion(event.target.checked)}
+                />
+              </label>
+              <label>
+                <span>
+                  <b>High contrast</b>
+                  <small>Stronger panels, borders and focus visibility</small>
+                </span>
+                <input
+                  type="checkbox"
+                  checked={highContrast}
+                  onChange={(event) => setHighContrast(event.target.checked)}
+                />
+              </label>
+            </div>
+            <p className="atmosphere-note">
+              All sounds are generated in your browser. No audio files, tracking
+              or downloads are used.
+            </p>
+            <button
+              className="primary"
+              onClick={() => setShowAtmosphere(false)}
+            >
+              Save atmosphere
+            </button>
+          </div>
         </div>
       )}
 

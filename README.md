@@ -2,6 +2,18 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.8 Audio & Atmosphere
+
+- Procedural browser-generated Toronto soundscapes with no external audio assets
+- Weather-aware ambience for rain, snow, heat and clear conditions
+- Morning, afternoon, evening and night lighting states
+- Persistent interface-sound, ambience and master-volume controls
+- One-click soundscape preview and in-game now-playing control
+- Reduced-motion mode that disables decorative and weather animation
+- High-contrast presentation mode with stronger focus visibility
+- Automatic operating-system reduced-motion preference detection
+- Automated tests for time phases, soundscape selection and safe volume limits
+
 ## V5.7 Progression & Rewards
 
 - Six persistent founder levels from Neighbourhood Starter to Micro Empire Architect

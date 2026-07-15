@@ -25,6 +25,7 @@ import {
   runXp,
   xpToNextLevel,
 } from "./progression";
+import { dayPhase, safeVolume, soundscapeFor } from "./atmosphere";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -160,6 +161,26 @@ describe("founder progression", () => {
 
   it("assigns increasing level requirements to founder trials", () => {
     expect(FOUNDER_TRIALS.map((trial) => trial.level)).toEqual([2, 3, 4]);
+  });
+});
+
+describe("audio and atmosphere", () => {
+  it("maps operating hours to stable lighting phases", () => {
+    expect(dayPhase(9)).toBe("morning");
+    expect(dayPhase(14)).toBe("afternoon");
+    expect(dayPhase(18)).toBe("evening");
+    expect(dayPhase(22)).toBe("night");
+  });
+
+  it("selects weather-aware procedural soundscapes", () => {
+    expect(soundscapeFor("rain", 12, true).name).toContain("Rain");
+    expect(soundscapeFor("clear", 22, true).name).toContain("dark");
+  });
+
+  it("keeps volume inside the Web Audio safe range", () => {
+    expect(safeVolume(-1)).toBe(0);
+    expect(safeVolume(2)).toBe(1);
+    expect(safeVolume(0.4)).toBe(0.4);
   });
 });
 
