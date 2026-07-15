@@ -2,6 +2,15 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V4.0 Living Toronto Edition
+
+- Explore an interactive Toronto map with eight destinations
+- Travel through the city using time, energy and TTC fares
+- Visit MaRS, City Hall, Kensington Market, Harbourfront and financial hubs
+- Maintain a home base and upgrade founder housing
+- Unlock a TTC founder pass, city permits, networks and opportunity signals
+- Move seamlessly between the living city and the operating-floor simulation
+
 ## V3.4 Founder Leadership Edition
 
 - Founder energy, stress, focus and recovery affect execution

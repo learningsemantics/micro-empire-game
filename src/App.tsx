@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
+type CityKey = "junction" | "kensington" | "financial" | "harbour" | "liberty" | "yorkville" | "mars" | "cityhall";
 type SegmentKey = "Student" | "Professional" | "Family" | "Tourist" | "Small Business" | "Corporate";
 type SupplierKey = "budget" | "local" | "premium";
 type DifficultyKey = "founder" | "operator" | "mogul";
@@ -67,6 +68,9 @@ type GameState = {
   negotiation: string | null; negotiationWins: number; rentDiscount: number;
   funding: FundingKey; debtBalance: number; equityGiven: number;
   milestone: "profit" | "brand" | "people";
+  founderLocation: CityKey; homeLocation: CityKey; transitPass: boolean;
+  network: number; permitLevel: number; placesVisited: CityKey[];
+  housingTier: "room" | "studio";
   segmentSales: Record<SegmentKey, number>;
   customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string; returning: boolean; source: string };
   message: string;
@@ -94,6 +98,17 @@ const DISTRICTS = {
   harbour: { name: "Harbourfront", icon: "≈", rent: 145, traffic: "High", tone: "Seasonal & social", description: "Tourists and professionals bring volume, but rent and expectations are higher.", segments: ["Tourist", "Professional", "Corporate"] as SegmentKey[] },
   liberty: { name: "Liberty Village", icon: "▦", rent: 125, traffic: "Targeted", tone: "Business-focused", description: "Startups, corporate teams and ambitious professionals value premium offers.", segments: ["Small Business", "Corporate", "Professional"] as SegmentKey[] },
 } as const;
+
+const CITY: Record<CityKey,{name:string;icon:string;x:number;y:number;kind:string;signal:string}> = {
+  junction:{name:"The Junction",icon:"⌂",x:12,y:50,kind:"Home",signal:"Affordable home base · loyal local demand"},
+  kensington:{name:"Kensington Market",icon:"✦",x:31,y:42,kind:"Network",signal:"Founder meetups · creative customers"},
+  financial:{name:"Financial District",icon:"$",x:58,y:54,kind:"Bank",signal:"Capital and corporate opportunity"},
+  harbour:{name:"Harbourfront",icon:"≈",x:60,y:78,kind:"Market",signal:"Tourism · seasonal foot traffic"},
+  liberty:{name:"Liberty Village",icon:"▦",x:36,y:69,kind:"Business",signal:"Startups · premium B2B demand"},
+  yorkville:{name:"Yorkville",icon:"◆",x:67,y:27,kind:"Investors",signal:"Affluent customers · expensive access"},
+  mars:{name:"MaRS Discovery",icon:"◎",x:52,y:31,kind:"Learning",signal:"Mentors · research · innovation"},
+  cityhall:{name:"City Hall",icon:"◫",x:51,y:45,kind:"Civic",signal:"Permits · grants · city programs"},
+};
 
 const SEGMENTS: Record<SegmentKey, { icon: string; budget: number; patience: number }> = {
   Student: { icon: "◒", budget: 120, patience: 3 }, Professional: { icon: "◆", budget: 220, patience: 3 },
@@ -172,6 +187,7 @@ const initialState: GameState = {
   interviews: 0, insights: 0, pmf: 35, acquiredCustomers: 0, repeatCustomers: 0, referrals: 0, marketingSpend: 0, totalCogs: 0, experiment: null, experimentHistory: [],
   energy:100,stress:15,focus:80,skills:{discovery:0,finance:0,leadership:0,negotiation:0,strategy:0},skillPoints:1,mentorTrust:{nadia:40,marcus:40,farah:40},negotiation:null,negotiationWins:0,rentDiscount:0,
   funding:"bootstrapped",debtBalance:0,equityGiven:0,milestone:"profit",
+  founderLocation:"junction",homeLocation:"junction",transitPass:false,network:0,permitLevel:0,placesVisited:["junction"],housingTier:"room",
   competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
@@ -190,6 +206,7 @@ export default function Home() {
   const [hydrated, setHydrated] = useState(false);
   const [scenarioDraft, setScenarioDraft] = useState({ name: "My Founder Challenge", cash: 1000, days: 20, difficulty: "operator" as DifficultyKey, business: "coffee" as BusinessKey, district: "junction" as DistrictKey, seed: 4242 });
   const [shareStatus, setShareStatus] = useState("");
+  const [worldView,setWorldView]=useState<"city"|"business">("city");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -234,9 +251,10 @@ export default function Home() {
     const max = selected === "coffee" ? 10 : selected === "career" ? 7 : 5;
     setGame({ ...initialState, phase: "play", business: selected, cash: game.cash - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
-      district: game.district, difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
+      district: game.district, founderLocation:game.district as CityKey,difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
       customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
+    setWorldView("city");
     setShowHelp(true);
   }
 
@@ -353,9 +371,10 @@ export default function Home() {
     const rent = Math.round((DISTRICTS[g.district].rent + g.day * 10) * DIFFICULTIES[g.difficulty].rent * (1-g.rentDiscount) * (1-g.skills.finance*.04));
     const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
     const debtPayment=Math.min(g.debtBalance,Math.round(g.debtBalance*.035));
-    const cash = g.cash - rent - payroll-debtPayment;
-    const expenses = g.expenses + rent + payroll+debtPayment;
-    const dailyExpenses = g.dailyExpenses + rent + payroll+debtPayment;
+    const housing=g.housingTier==="studio"?55:25;
+    const cash = g.cash - rent - payroll-debtPayment-housing;
+    const expenses = g.expenses + rent + payroll+debtPayment+housing;
+    const dailyExpenses = g.dailyExpenses + rent + payroll+debtPayment+housing;
     const finished = g.day >= g.campaignDays || cash < 0;
     const playerStrength = g.reputation / Math.max(.7, g.price);
     const rival = DIFFICULTIES[g.difficulty].rival;
@@ -384,7 +403,7 @@ export default function Home() {
       const grant=750+g.skills.strategy*150;
       const next = ev.apply({ ...g, day: nextDayNumber, hour: 9, phase: "play", event: stageUp ? `${STAGES[nextStage].name} unlocked! ${money(grant)} grant, +3 capacity and a skill point.` : ev.text,
         dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0, decision: null,
-        cash: g.cash + (stageUp ? grant : 0),skillPoints:g.skillPoints+(stageUp?1:0),energy:clamp(g.energy+18,0,100),stress:clamp(g.stress-12,0,100),focus:clamp(g.focus+10,0,100),maxCapacity: g.maxCapacity + (stageUp ? 3 : 0), capacity: stageUp ? g.maxCapacity + 3 : g.capacity,
+        cash: g.cash + (stageUp ? grant : 0),skillPoints:g.skillPoints+(stageUp?1:0),energy:clamp(g.energy+(g.housingTier==="studio"?27:18),0,100),stress:clamp(g.stress-(g.housingTier==="studio"?18:12),0,100),focus:clamp(g.focus+10,0,100),maxCapacity: g.maxCapacity + (stageUp ? 3 : 0), capacity: stageUp ? g.maxCapacity + 3 : g.capacity,
         reputation: clamp(g.reputation + (stageUp ? 5 : 0), 0, 100), stageRewarded: Math.max(g.stageRewarded, nextStage),
         staff: g.staff.map(member => ({ ...member,tenure:member.tenure+1,loyalty:clamp(member.loyalty+(member.morale>=70?2:-2),20,100),morale: clamp(member.morale + 8, 20, 100) })),
         message: stageUp ? `Welcome to ${STAGES[nextStage].name}. Your operating ceiling just expanded.` : `Day ${nextDayNumber} begins. ${ev.text}` });
@@ -416,7 +435,7 @@ export default function Home() {
     });
   }
 
-  function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); beep(400); }
+  function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); setWorldView("city"); beep(400); }
 
   function prepareDailyChallenge() {
     const dateKey = Number(new Date().toISOString().slice(0,10).replaceAll("-",""));
@@ -473,6 +492,10 @@ export default function Home() {
   }
 
   function restFounder(){advance(g=>({...g,energy:clamp(g.energy+35,0,100),stress:clamp(g.stress-24,0,100),focus:clamp(g.focus+18,0,100),message:"You protected an hour for recovery. Energy and judgment improved."}));beep(430)}
+  function travelTo(destination:CityKey){if(destination===game.founderLocation)return;const fare=game.transitPass?0:4;advance(g=>({...g,cash:g.cash-fare,expenses:g.expenses+fare,dailyExpenses:g.dailyExpenses+fare,founderLocation:destination,placesVisited:g.placesVisited.includes(destination)?g.placesVisited:[...g.placesVisited,destination],energy:clamp(g.energy-2,0,100),message:`You took the TTC to ${CITY[destination].name}${fare?` for ${money(fare)}`:" with your transit pass"}. ${CITY[destination].signal}.`}));beep(510)}
+  function cityAction(){const key=game.founderLocation;if(key===game.homeLocation){restFounder();return}if(key===(game.district as CityKey)){setWorldView("business");setGame(g=>({...g,message:`You arrived at ${BUSINESSES[g.business!].name}. The operating floor is ready.`}));return}if(key==="mars"&&game.cash>=80)advance(g=>({...g,cash:g.cash-80,expenses:g.expenses+80,dailyExpenses:g.dailyExpenses+80,network:clamp(g.network+8,0,100),skillPoints:g.skillPoints+1,message:"A MaRS workshop added one skill point and expanded your founder network."}));if(key==="cityhall"&&game.cash>=100)advance(g=>({...g,cash:g.cash-100,expenses:g.expenses+100,dailyExpenses:g.dailyExpenses+100,permitLevel:Math.min(3,g.permitLevel+1),reputation:clamp(g.reputation+4,0,100),message:"Your city permit level increased. Compliance builds neighbourhood trust."}));if(key==="kensington")advance(g=>({...g,network:clamp(g.network+12,0,100),referrals:g.referrals+2,stress:clamp(g.stress-5,0,100),message:"A Kensington founder meetup produced two referrals and stronger connections."}));if(key==="financial"){if(game.funding==="bootstrapped")chooseFunding("debt");else advance(g=>({...g,focus:clamp(g.focus+12,0,100),message:"A banker reviewed your runway and sharpened your financing plan."}))}if(key==="yorkville"){if(game.funding==="bootstrapped")chooseFunding("angel");else advance(g=>({...g,network:clamp(g.network+10,0,100),reputation:clamp(g.reputation+3,0,100),message:"An investor gathering strengthened your network and visibility."}))}if(key==="harbour")advance(g=>({...g,interviews:g.interviews+2,insights:g.insights+2,pmf:clamp(g.pmf+3+g.skills.discovery,0,100),message:"Waterfront observation generated two customer interviews and a new demand signal."}));if(key==="liberty")advance(g=>({...g,network:clamp(g.network+8,0,100),pmf:clamp(g.pmf+2,0,100),message:"A Liberty Village operator introduced you to the local B2B community."}));beep(690)}
+  function buyTransitPass(){if(game.transitPass||game.cash<180)return;setGame(g=>({...g,cash:g.cash-180,expenses:g.expenses+180,dailyExpenses:g.dailyExpenses+180,transitPass:true,message:"TTC founder pass activated. Travel is now fare-free."}));beep(620)}
+  function upgradeHousing(){if(game.housingTier==="studio"||game.cash<800)return;setGame(g=>({...g,cash:g.cash-800,expenses:g.expenses+800,dailyExpenses:g.dailyExpenses+800,housingTier:"studio",energy:clamp(g.energy+20,0,100),message:"You moved into a studio. Higher daily housing cost buys stronger recovery."}));beep(740)}
   function upgradeSkill(key:SkillKey){if(!game.skillPoints||game.skills[key]>=5)return;setGame(g=>({...g,skillPoints:g.skillPoints-1,skills:{...g.skills,[key]:g.skills[key]+1},message:`${SKILLS[key].name} advanced to level ${g.skills[key]+1}.`}));beep(850)}
   function meetMentor(key:keyof typeof MENTORS){if(game.cash<120)return;const m=MENTORS[key];advance(g=>({...g,cash:g.cash-120,expenses:g.expenses+120,dailyExpenses:g.dailyExpenses+120,focus:clamp(g.focus+16,0,100),stress:clamp(g.stress-8,0,100),mentorTrust:{...g.mentorTrust,[key]:clamp(g.mentorTrust[key]+10,0,100)},skills:{...g.skills,[m.skill]:Math.min(5,g.skills[m.skill]+1)},message:`${m.name} sharpened your ${SKILLS[m.skill].name.toLowerCase()}.`}));beep(700)}
   function chooseFunding(key:FundingKey){if(game.funding!=="bootstrapped"||key==="bootstrapped")return;setGame(g=>key==="debt"?{...g,funding:key,cash:g.cash+2200,debtBalance:2600,message:"A working-capital loan adds runway, with daily repayments."}:{...g,funding:key,cash:g.cash+3500,equityGiven:15,reputation:clamp(g.reputation+4,0,100),message:"An angel invested $3,500 for 15% of the company."});beep(760)}
@@ -528,8 +551,8 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">V3.4 · Founder Leadership Edition</div>
-            <p className="lede">Build a company, master the daily challenge, or design a scenario for another founder.</p>
+            <div className="ribbon">V4.0 · Living Toronto Edition</div>
+            <p className="lede">Explore Toronto, build a founder life, and grow one neighbourhood venture into a citywide micro empire.</p>
             <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "modes" }))}>Choose game mode <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
@@ -610,6 +633,7 @@ export default function Home() {
             <div className="pmf-card"><span><small>PRODUCT–MARKET FIT</small><b>{game.pmf}/100</b></span><i><u style={{width:`${game.pmf}%`}}/></i><em>{game.pmf >= 75 ? "Strong pull · protect retention" : game.pmf >= 50 ? "Promising · keep experimenting" : "Weak signal · interview customers"}</em></div>
             <div className="founder-vitals"><h3>Founder wellbeing</h3>{[["Energy",game.energy],["Focus",game.focus],["Stress",game.stress]].map(([label,value])=><span className={label==="Stress"?"stress":""} key={label}><small>{label}</small><i><u style={{width:`${value}%`}}/></i><b>{value}</b></span>)}</div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} · {DIFFICULTIES[game.difficulty].name}<small>{money(Math.round((DISTRICTS[game.district].rent + game.day * 10) * DIFFICULTIES[game.difficulty].rent))} rent due today</small></div>
+            <div className="city-status"><span><small>YOU ARE IN</small><b>{CITY[game.founderLocation].name}</b></span><span><small>NETWORK</small><b>{game.network}/100</b></span><span><small>CITY ACCESS</small><b>{game.placesVisited.length}/8</b></span></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
               <Quest done={game.quests[0]} label="Serve 30 customers" progress={`${Math.min(game.served, 30)}/30`} />
@@ -621,7 +645,8 @@ export default function Home() {
             <div className="achievement-mini"><h3>Achievements · {game.achievements.length}/6</h3>{game.achievements.slice(-3).map(id => <i key={id} title={ACHIEVEMENTS[id as keyof typeof ACHIEVEMENTS].name}>{ACHIEVEMENTS[id as keyof typeof ACHIEVEMENTS].icon}</i>)}</div>
           </aside>
 
-          <div className="world-panel">
+          {worldView === "business" ? <div className="world-panel">
+            <button className="map-switch" onClick={()=>setWorldView("city")}>⌖ Toronto map</button>
             <Neighbourhood active={game.business!} people={Math.min(10, 3 + game.marketing + Math.floor(game.reputation / 20))}/>
             <div className="store-sign">{business.icon} {business.name}<small>OPEN · {game.capacity}/{game.maxCapacity} {business.stock}</small></div>
             {game.customer ? <div className="customer-card">
@@ -629,7 +654,7 @@ export default function Home() {
               <div className="patience"><i style={{ width: `${game.customer.patience / 3 * 100}%` }}/></div></div>
             </div> : <div className="customer-card quiet">Waiting for the next customer…</div>}
             <div className="toast" aria-live="polite">{game.message}</div>
-          </div>
+          </div> : <div className="city-world"><div className="city-map-head"><span><small>LIVE TORONTO</small><b>{clock} · Day {game.day}</b></span><div><button onClick={buyTransitPass} disabled={game.transitPass||game.cash<180}>{game.transitPass?"TTC Pass active":"Buy TTC Pass · $180"}</button><button onClick={()=>setWorldView("business")}>Open business view</button></div></div><div className={`toronto-map hour-${game.hour}`}><div className="lake-label">LAKE ONTARIO</div><div className="city-roads"/><div className="ttc-line"/><div className="cn-map">⌃<small>CN</small></div>{(Object.keys(CITY) as CityKey[]).map(key=><button key={key} style={{left:`${CITY[key].x}%`,top:`${CITY[key].y}%`}} className={`city-place ${game.founderLocation===key?"current":""} ${game.placesVisited.includes(key)?"visited":""}`} onClick={()=>travelTo(key)}><i>{CITY[key].icon}</i><span><b>{CITY[key].name}</b><small>{CITY[key].kind}</small></span>{game.founderLocation===key&&<em>YOU</em>}</button>)}<div className="founder-marker" style={{left:`${CITY[game.founderLocation].x}%`,top:`${CITY[game.founderLocation].y}%`}}>●</div></div><div className="place-drawer"><span><small>{CITY[game.founderLocation].kind.toUpperCase()}</small><b>{CITY[game.founderLocation].name}</b><em>{CITY[game.founderLocation].signal}</em></span><button onClick={cityAction}>{game.founderLocation===game.homeLocation?"Recover at home":game.founderLocation===(game.district as CityKey)?"Enter your business":game.founderLocation==="mars"?"Attend workshop · $80":game.founderLocation==="cityhall"?`Upgrade permit · $100`:game.founderLocation==="financial"?"Meet a banker":game.founderLocation==="yorkville"?"Meet investors":"Explore opportunity"}</button>{game.founderLocation===game.homeLocation&&<button onClick={upgradeHousing} disabled={game.housingTier==="studio"||game.cash<800}>{game.housingTier==="studio"?"Studio home active":"Upgrade to studio · $800"}</button>}</div><div className="toast city-toast">{game.message}</div></div>}
 
           <aside className="action-panel">
             <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council","lab","lead"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
