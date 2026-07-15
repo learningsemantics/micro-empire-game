@@ -2,6 +2,15 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V3.4 Founder Leadership Edition
+
+- Founder energy, stress, focus and recovery affect execution
+- Five-branch entrepreneurial skill tree and mentor network
+- Persistent employee tenure, morale and loyalty
+- Five interactive commercial negotiations
+- Bootstrap, debt and angel-financing strategies
+- Player-selected north-star milestones and ownership reporting
+
 ## V2.1 strategy systems
 
 - Three Toronto districts with different rents, traffic and customer demand
