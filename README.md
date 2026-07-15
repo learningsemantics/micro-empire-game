@@ -2,6 +2,15 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V4.3 Living Population Edition
+
+- Twelve persistent Toronto residents with homes, roles, segments and personalities
+- Daily population movement between city destinations
+- Residents remember service, pricing and conversations
+- Relationship, loyalty, mood and encounter histories
+- Social capital, referrals and relationship-based collaborations
+- Location-aware people network and relationship directory
+
 ## V4.2 Business Sandbox Edition
 
 - Acquire multiple Toronto properties and business locations
