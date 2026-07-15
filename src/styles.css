@@ -3473,6 +3473,130 @@ button:focus-visible {
     grid-template-columns: 1fr;
   }
 }
+.crisis-status {
+  display: grid;
+  grid-template-columns: 70px 1fr 55px;
+  gap: 5px;
+}
+.crisis-status span {
+  background: #fff3cd;
+  border-radius: 8px;
+  padding: 7px;
+}
+.crisis-status small,
+.crisis-status b {
+  display: block;
+}
+.crisis-status small {
+  font-size: 6px;
+  text-transform: uppercase;
+}
+.crisis-status b {
+  font-size: 8px;
+  margin-top: 3px;
+}
+.crisis-log {
+  font-size: 7px;
+  border-left: 3px solid #ec6b51;
+  padding: 5px 7px;
+  background: #f5e7d5;
+  border-radius: 5px;
+}
+.crisis-screen {
+  background: linear-gradient(#321e2ae8, #071f25f5);
+}
+.crisis-card {
+  width: min(720px, 94vw);
+  border-color: #f0b946 !important;
+}
+.crisis-icon {
+  width: 70px;
+  height: 70px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  margin: 0 auto;
+  background: #ec6b51;
+  color: white;
+  font-size: 35px;
+  box-shadow: 0 6px 0 #9e3f31;
+}
+.crisis-card h2 {
+  font-family: Impact, sans-serif;
+  font-size: 42px;
+  margin: 12px 0;
+}
+.ethics-readout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  margin: 15px 0;
+}
+.ethics-readout span {
+  background: #173f45;
+  color: white;
+  border-radius: 9px;
+  padding: 9px;
+  font-size: 9px;
+}
+.ethics-readout b {
+  display: block;
+  color: #f0b946;
+  font-size: 15px;
+}
+.crisis-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.crisis-choices button {
+  display: flex;
+  flex-direction: column;
+  border: 0;
+  border-radius: 12px;
+  background: #0e6668;
+  color: white;
+  padding: 15px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 5px 0 #073941;
+}
+.crisis-choices button + button {
+  background: #6c58a2;
+  box-shadow: 0 5px 0 #413461;
+}
+.crisis-choices small {
+  font-size: 7px;
+  color: #f0d67c;
+}
+.crisis-choices b {
+  font-size: 15px;
+  margin: 4px 0;
+}
+.crisis-choices span {
+  font-size: 9px;
+}
+.crisis-choices em {
+  font-size: 7px;
+  font-style: normal;
+  margin-top: 9px;
+  opacity: 0.75;
+}
+@media (max-width: 600px) {
+  .crisis-choices {
+    grid-template-columns: 1fr;
+  }
+  .crisis-card h2 {
+    font-size: 32px;
+  }
+  .crisis-status {
+    grid-template-columns: 1fr 1fr;
+  }
+  .crisis-status span:nth-child(2) {
+    grid-column: 1/-1;
+    grid-row: 2;
+  }
+}
 @media (min-width: 721px) and (max-width: 1050px) {
   .action-panel > .console-primary,
   .action-panel > .ops-tabs,

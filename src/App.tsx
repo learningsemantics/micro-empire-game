@@ -25,6 +25,7 @@ import {
   type ModifierKey,
   type ObjectiveSnapshot,
 } from "./game/replay";
+import { CRISES, crisisForDay, shouldTriggerCrisis } from "./game/crisis";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -157,6 +158,7 @@ type Phase =
   | "dayEnd"
   | "decision"
   | "negotiation"
+  | "crisis"
   | "result";
 
 type GameState = {
@@ -268,6 +270,10 @@ type GameState = {
   objectiveStreak: number;
   completedObjectives: number;
   runId: string;
+  activeCrisis: string | null;
+  crisisHistory: string[];
+  ethicsScore: number;
+  marketShock: { days: number; demand: number; rent: number; label: string };
   segmentSales: Record<SegmentKey, number>;
   customer: null | {
     residentId: string;
@@ -1310,6 +1316,10 @@ const initialState: GameState = {
   objectiveStreak: 0,
   completedObjectives: 0,
   runId: "",
+  activeCrisis: null,
+  crisisHistory: [],
+  ethicsScore: 50,
+  marketShock: { days: 0, demand: 1, rent: 1, label: "Stable conditions" },
   competitors: [
     { name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 },
     { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 },
@@ -1668,7 +1678,7 @@ export default function Home() {
 
   function cityDemand(g: GameState) {
     return calculateDemand(
-      WEATHER[g.weather].demand,
+      WEATHER[g.weather].demand * g.marketShock.demand,
       ECONOMY[g.economy].factor,
       g.neighbourhoodHeat[g.district as CityKey],
     );
@@ -2053,6 +2063,7 @@ export default function Home() {
         (1 - g.skills.finance * 0.04) *
         rentPolicy *
         RUN_MODIFIERS[g.runModifier].rent *
+        g.marketShock.rent *
         (0.9 + g.neighbourhoodHeat[g.district as CityKey] / 500),
     );
     const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
@@ -2182,6 +2193,10 @@ export default function Home() {
       dailyPayroll: payroll,
       objectiveStreak: objectiveComplete ? g.objectiveStreak + 1 : 0,
       completedObjectives: g.completedObjectives + (objectiveComplete ? 1 : 0),
+      marketShock:
+        g.marketShock.days > 1
+          ? { ...g.marketShock, days: g.marketShock.days - 1 }
+          : { days: 0, demand: 1, rent: 1, label: "Stable conditions" },
       debtBalance: Math.max(0, g.debtBalance - debtPayment),
       competitors,
       customer: null,
@@ -2497,9 +2512,12 @@ export default function Home() {
   }
 
   function continueCampaign() {
+    const crisis = crisisForDay(game.seed, game.day + 1);
     const story = NARRATIVES[game.day + 1];
     const negotiation = NEGOTIATIONS[game.day + 1];
-    if (negotiation)
+    if (shouldTriggerCrisis(game.day + 1))
+      setGame((g) => ({ ...g, phase: "crisis", activeCrisis: crisis.id }));
+    else if (negotiation)
       setGame((g) => ({
         ...g,
         phase: "negotiation",
@@ -2508,6 +2526,48 @@ export default function Home() {
     else if (story)
       setGame((g) => ({ ...g, phase: "decision", decision: story.id }));
     else beginNextDay();
+  }
+
+  function resolveCrisis(choice: "a" | "b") {
+    setGame((g) => {
+      const crisis = CRISES.find((item) => item.id === g.activeCrisis);
+      if (!crisis) return g;
+      const selected = crisis[choice];
+      const effect = selected.effect;
+      const next: GameState = {
+        ...g,
+        activeCrisis: null,
+        crisisHistory: [...g.crisisHistory, `${crisis.id}:${choice}`],
+        cash: g.cash + effect.cash,
+        revenue: g.revenue + Math.max(0, effect.cash),
+        expenses: g.expenses + Math.max(0, -effect.cash),
+        reputation: clamp(g.reputation + effect.reputation, 0, 100),
+        ethicsScore: clamp(g.ethicsScore + effect.ethics, 0, 100),
+        marketShock: {
+          days: effect.days,
+          demand: effect.demand,
+          rent: effect.rent,
+          label: crisis.title,
+        },
+        staff: g.staff.map((member) => ({
+          ...member,
+          morale: clamp(member.morale + effect.morale, 20, 100),
+        })),
+        storyInbox: [
+          {
+            day: g.day,
+            from: "Toronto Business Desk",
+            text: `${crisis.title}: ${selected.label}. The consequences will shape the next ${effect.days} day${effect.days === 1 ? "" : "s"}.`,
+            tone: effect.ethics < 0 ? "urgent" : "warm",
+          },
+          ...g.storyInbox,
+        ],
+        message: `${selected.label}. ${selected.note}.`,
+      };
+      window.setTimeout(() => beginNextDay(next), 0);
+      return next;
+    });
+    beep(choice === "a" ? 760 : 520);
   }
 
   function resolveDecision(choice: "a" | "b") {
@@ -3949,10 +4009,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.5 · Goals &amp; Replayability</div>
+            <div className="ribbon">V5.6 · Events &amp; Decisions</div>
             <p className="lede">
-              Every run tells a different founder story—with daily objectives,
-              strategic modifiers, score grades and a permanent run history.
+              Face economic shocks, operational crises and ethical decisions
+              whose consequences reshape the days ahead.
             </p>
             <button
               className="primary huge"
@@ -5607,6 +5667,34 @@ export default function Home() {
                 <p className="pulse-note">
                   {WEATHER[game.weather].note}. {ECONOMY[game.economy].note}.
                 </p>
+                <h4>Resilience &amp; judgment</h4>
+                <div className="crisis-status">
+                  <span>
+                    <small>Ethics</small>
+                    <b>{game.ethicsScore}/100</b>
+                  </span>
+                  <span>
+                    <small>Active shock</small>
+                    <b>{game.marketShock.label}</b>
+                  </span>
+                  <span>
+                    <small>Duration</small>
+                    <b>{game.marketShock.days} days</b>
+                  </span>
+                </div>
+                {game.crisisHistory
+                  .slice(-3)
+                  .reverse()
+                  .map((entry, index) => {
+                    const [id, choice] = entry.split(":");
+                    const crisis = CRISES.find((item) => item.id === id);
+                    return crisis ? (
+                      <p className="crisis-log" key={`${entry}-${index}`}>
+                        {crisis.icon} {crisis.title} ·{" "}
+                        {crisis[choice as "a" | "b"].label}
+                      </p>
+                    ) : null;
+                  })}
                 <h4>City policy</h4>
                 <article className="policy-card">
                   <strong>{POLICIES[game.cityPolicy].name}</strong>
@@ -5887,6 +5975,49 @@ export default function Home() {
                 <p className="consequence-note">
                   Your choice becomes part of the company’s story and cannot be
                   undone.
+                </p>
+              </div>
+            </section>
+          );
+        })()}
+
+      {game.phase === "crisis" &&
+        game.activeCrisis &&
+        (() => {
+          const crisis = CRISES.find((item) => item.id === game.activeCrisis)!;
+          return (
+            <section className="modal-screen crisis-screen">
+              <div className="report-card crisis-card">
+                <p className="eyebrow">
+                  {crisis.category} · Day {game.day + 1}
+                </p>
+                <div className="crisis-icon">{crisis.icon}</div>
+                <h2>{crisis.title}</h2>
+                <p>{crisis.text}</p>
+                <div className="ethics-readout">
+                  <span>
+                    Founder ethics <b>{game.ethicsScore}/100</b>
+                  </span>
+                  <span>
+                    Crises faced <b>{game.crisisHistory.length}</b>
+                  </span>
+                </div>
+                <div className="crisis-choices">
+                  {(["a", "b"] as const).map((key) => (
+                    <button key={key} onClick={() => resolveCrisis(key)}>
+                      <small>PATH {key.toUpperCase()}</small>
+                      <b>{crisis[key].label}</b>
+                      <span>{crisis[key].note}</span>
+                      <em>
+                        Consequences persist {crisis[key].effect.days} day
+                        {crisis[key].effect.days === 1 ? "" : "s"}
+                      </em>
+                    </button>
+                  ))}
+                </div>
+                <p className="consequence-note">
+                  There is no perfect answer. Toronto will remember what you
+                  protected.
                 </p>
               </div>
             </section>

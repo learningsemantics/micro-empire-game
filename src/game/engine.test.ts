@@ -17,6 +17,7 @@ import {
   objectiveProgress,
   scoreGrade,
 } from "./replay";
+import { crisisForDay, shouldTriggerCrisis } from "./crisis";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -114,6 +115,19 @@ describe("replay systems", () => {
     );
     expect(scoreGrade(17000)).toBe("S");
     expect(scoreGrade(4000)).toBe("C");
+  });
+});
+
+describe("crisis engine", () => {
+  it("schedules crises every fifth day after opening week begins", () => {
+    expect(shouldTriggerCrisis(4)).toBe(false);
+    expect(shouldTriggerCrisis(5)).toBe(true);
+    expect(shouldTriggerCrisis(10)).toBe(true);
+  });
+
+  it("selects crises deterministically from seed and day", () => {
+    expect(crisisForDay(2026, 10)).toEqual(crisisForDay(2026, 10));
+    expect(crisisForDay(2026, 10).a.effect.days).toBeGreaterThan(0);
   });
 });
 

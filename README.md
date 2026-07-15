@@ -2,6 +2,17 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.6 Events & Decisions
+
+- Five deterministic crisis families covering supply, privacy, rent, staffing and city emergencies
+- Ethical dilemmas with a persistent founder-ethics score
+- Multi-day demand and rent shocks caused by player choices
+- Crisis decisions that change cash, reputation and team morale
+- Toronto Business Desk callbacks in the story inbox
+- Crisis history and active-shock reporting in Toronto Pulse
+- Dedicated cinematic crisis interface with transparent tradeoffs
+- Automated crisis scheduling and determinism tests
+
 ## V5.5 Goals & Replayability
 
 - Deterministic daily objectives with cash rewards and streak tracking
