@@ -11,6 +11,12 @@ import {
   chapterUnlocked,
   missionProgress,
 } from "./campaign";
+import {
+  RUN_MODIFIERS,
+  dailyObjective,
+  objectiveProgress,
+  scoreGrade,
+} from "./replay";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -74,6 +80,40 @@ describe("campaign missions", () => {
   it("unlocks a chapter only after earlier missions are claimed", () => {
     expect(chapterUnlocked(2, [])).toBe(false);
     expect(chapterUnlocked(2, ["first-customers", "listen"])).toBe(true);
+  });
+});
+
+describe("replay systems", () => {
+  it("generates deterministic daily objectives", () => {
+    expect(dailyObjective(2026, 4)).toEqual(dailyObjective(2026, 4));
+    expect(dailyObjective(2026, 4)).not.toEqual(dailyObjective(2026, 5));
+  });
+
+  it("tracks progress from the start-of-day baseline", () => {
+    const objective = dailyObjective(1, 2);
+    const baseline = {
+      served: 3,
+      revenue: 100,
+      interviews: 0,
+      socialCapital: 2,
+    };
+    const current = {
+      served: 20,
+      revenue: 900,
+      interviews: 5,
+      socialCapital: 20,
+    };
+    expect(objectiveProgress(objective, current, baseline)).toBe(
+      objective.target,
+    );
+  });
+
+  it("rewards harder modifiers and grades stronger scores", () => {
+    expect(RUN_MODIFIERS.pressure.score).toBeGreaterThan(
+      RUN_MODIFIERS.standard.score,
+    );
+    expect(scoreGrade(17000)).toBe("S");
+    expect(scoreGrade(4000)).toBe("C");
   });
 });
 

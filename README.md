@@ -2,6 +2,17 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.5 Goals & Replayability
+
+- Deterministic daily objectives with cash rewards and streak tracking
+- Four run modifiers that change starting conditions, rent pressure and score multipliers
+- S-to-D score grades for clearer run comparison
+- Persistent local history for the eight most recent campaigns
+- Modifier selection shared by founder campaigns and custom scenarios
+- High Pressure daily challenge rules
+- Replay-focused final report and recent-run browser
+- Automated tests for objectives, modifiers and score grading
+
 ## V5.4 Campaign & Missions
 
 - Four campaign chapters spanning customers, validation, leadership, community and expansion

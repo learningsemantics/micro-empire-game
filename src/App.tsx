@@ -17,6 +17,14 @@ import {
   simulateRivalDay,
 } from "./game/engine";
 import { SAVE_KEY, serializeSave, unwrapSave } from "./game/save";
+import {
+  RUN_MODIFIERS,
+  dailyObjective,
+  objectiveProgress,
+  scoreGrade,
+  type ModifierKey,
+  type ObjectiveSnapshot,
+} from "./game/replay";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -255,6 +263,11 @@ type GameState = {
   claimedMissionIds: string[];
   campaignXp: number;
   missionStreak: number;
+  runModifier: ModifierKey;
+  objectiveBaseline: ObjectiveSnapshot;
+  objectiveStreak: number;
+  completedObjectives: number;
+  runId: string;
   segmentSales: Record<SegmentKey, number>;
   customer: null | {
     residentId: string;
@@ -1292,6 +1305,11 @@ const initialState: GameState = {
   claimedMissionIds: [],
   campaignXp: 0,
   missionStreak: 0,
+  runModifier: "standard",
+  objectiveBaseline: { served: 0, revenue: 0, interviews: 0, socialCapital: 0 },
+  objectiveStreak: 0,
+  completedObjectives: 0,
+  runId: "",
   competitors: [
     { name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 },
     { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 },
@@ -1340,6 +1358,18 @@ export default function Home() {
   const [worldView, setWorldView] = useState<"city" | "business">("city");
   const [showBriefing, setShowBriefing] = useState(false);
   const [celebration, setCelebration] = useState("");
+  const [selectedModifier, setSelectedModifier] =
+    useState<ModifierKey>("standard");
+  const [runHistory, setRunHistory] = useState<
+    Array<{
+      id: string;
+      scenario: string;
+      score: number;
+      grade: string;
+      modifier: ModifierKey;
+      day: number;
+    }>
+  >([]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1398,12 +1428,41 @@ export default function Home() {
           /* ignore invalid save */
         }
       setHydrated(true);
+      try {
+        setRunHistory(
+          JSON.parse(localStorage.getItem("micro-empire-runs") || "[]"),
+        );
+      } catch {
+        setRunHistory([]);
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
     if (hydrated) localStorage.setItem(SAVE_KEY, serializeSave(game));
   }, [game, hydrated]);
+  useEffect(() => {
+    if (!hydrated || game.phase !== "result" || !game.runId) return;
+    setRunHistory((history) => {
+      if (history.some((run) => run.id === game.runId)) return history;
+      const finalScore = Math.round(
+        calculateFounderScore(game) * RUN_MODIFIERS[game.runModifier].score,
+      );
+      const next = [
+        {
+          id: game.runId,
+          scenario: game.scenarioName,
+          score: finalScore,
+          grade: scoreGrade(finalScore),
+          modifier: game.runModifier,
+          day: game.day,
+        },
+        ...history,
+      ].slice(0, 8);
+      localStorage.setItem("micro-empire-runs", JSON.stringify(next));
+      return next;
+    });
+  }, [game.phase, game.runId, hydrated]);
   useEffect(() => {
     if ("serviceWorker" in navigator)
       navigator.serviceWorker
@@ -1417,7 +1476,22 @@ export default function Home() {
     3,
     Math.floor(((game.day - 1) / game.campaignDays) * 4),
   );
-  const score = calculateFounderScore(game);
+  const score = Math.round(
+    calculateFounderScore(game) * RUN_MODIFIERS[game.runModifier].score,
+  );
+  const grade = scoreGrade(score);
+  const todayObjective = dailyObjective(game.seed, game.day);
+  const objectiveNow: ObjectiveSnapshot = {
+    served: game.served,
+    revenue: game.revenue,
+    interviews: game.interviews,
+    socialCapital: game.socialCapital,
+  };
+  const todayObjectiveProgress = objectiveProgress(
+    todayObjective,
+    objectiveNow,
+    game.objectiveBaseline,
+  );
   const rating =
     score >= 16000
       ? "Empire Builder"
@@ -1532,11 +1606,13 @@ export default function Home() {
   function startBusiness() {
     const b = BUSINESSES[selected];
     const max = selected === "coffee" ? 10 : selected === "career" ? 7 : 5;
+    const modifier = RUN_MODIFIERS[game.runModifier];
     setGame({
       ...initialState,
       phase: "play",
       business: selected,
-      cash: game.cash - b.cost,
+      cash: game.cash + modifier.cash - b.cost,
+      reputation: game.reputation + modifier.reputation,
       capacity: max,
       maxCapacity: max,
       expenses: b.cost,
@@ -1563,6 +1639,8 @@ export default function Home() {
       campaignDays: game.campaignDays,
       scenarioName: game.scenarioName,
       seed: game.seed,
+      runModifier: game.runModifier,
+      runId: `${Date.now()}-${game.seed}`,
       customer: makeCustomer(
         selected,
         b.unit,
@@ -1974,6 +2052,7 @@ export default function Home() {
         (1 - g.rentDiscount) *
         (1 - g.skills.finance * 0.04) *
         rentPolicy *
+        RUN_MODIFIERS[g.runModifier].rent *
         (0.9 + g.neighbourhoodHeat[g.district as CityKey] / 500),
     );
     const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
@@ -2026,8 +2105,27 @@ export default function Home() {
     });
     if (g.cityPolicy === "green" && g.supplier === "local")
       branchCosts = Math.round(branchCosts * 0.88);
+    const objective = dailyObjective(g.seed, g.day);
+    const objectiveComplete =
+      objectiveProgress(
+        objective,
+        {
+          served: g.served,
+          revenue: g.revenue + branchRevenue,
+          interviews: g.interviews,
+          socialCapital: g.socialCapital,
+        },
+        g.objectiveBaseline,
+      ) >= objective.target;
+    const objectiveReward = objectiveComplete ? objective.reward : 0;
     const cash =
-      g.cash - rent - payroll - debtPayment + branchRevenue - branchCosts;
+      g.cash -
+      rent -
+      payroll -
+      debtPayment +
+      branchRevenue -
+      branchCosts +
+      objectiveReward;
     const personalCash =
       g.personalCash - housing - Math.round(g.personalDebt * 0.015);
     const expenses = g.expenses + rent + payroll + debtPayment + branchCosts;
@@ -2082,6 +2180,8 @@ export default function Home() {
       expenses,
       dailyExpenses,
       dailyPayroll: payroll,
+      objectiveStreak: objectiveComplete ? g.objectiveStreak + 1 : 0,
+      completedObjectives: g.completedObjectives + (objectiveComplete ? 1 : 0),
       debtBalance: Math.max(0, g.debtBalance - debtPayment),
       competitors,
       customer: null,
@@ -2089,7 +2189,7 @@ export default function Home() {
       message:
         cash < 0
           ? "The business ran out of cash."
-          : `Day ${g.day} complete. Branches produced ${money(branchRevenue - branchCosts)} net · Housing ${money(housing)} · Payroll ${money(payroll)}.`,
+          : `Day ${g.day} complete. Branches produced ${money(branchRevenue - branchCosts)} net · ${objectiveComplete ? `${objective.title} completed for ${money(objectiveReward)} · ` : ""}Housing ${money(housing)} · Payroll ${money(payroll)}.`,
     });
   }
 
@@ -2236,6 +2336,12 @@ export default function Home() {
         dailyExpenses: 0,
         dailyCogs: 0,
         dailyPayroll: 0,
+        objectiveBaseline: {
+          served: g.served,
+          revenue: g.revenue,
+          interviews: g.interviews,
+          socialCapital: g.socialCapital,
+        },
         decision: null,
         cash: g.cash + (stageUp ? grant : 0),
         skillPoints: g.skillPoints + (stageUp ? 1 : 0),
@@ -2485,6 +2591,7 @@ export default function Home() {
     setWorldView("city");
     setConsoleGroup("business");
     setOpsTab("trade");
+    setSelectedModifier("standard");
     beep(400);
   }
 
@@ -2508,6 +2615,7 @@ export default function Home() {
       cash: 850,
       scenarioName: `Daily Challenge · ${new Date().toLocaleDateString("en-CA")}`,
       seed: dateKey,
+      runModifier: "pressure",
     });
   }
 
@@ -2524,6 +2632,7 @@ export default function Home() {
       cash: scenarioDraft.cash,
       scenarioName: scenarioDraft.name,
       seed: scenarioDraft.seed,
+      runModifier: selectedModifier,
     });
   }
 
@@ -3840,10 +3949,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.4 · Campaign &amp; Missions</div>
+            <div className="ribbon">V5.5 · Goals &amp; Replayability</div>
             <p className="lede">
-              Turn your Toronto founder story into a chaptered campaign with
-              missions, rewards and a path from first customer to city stage.
+              Every run tells a different founder story—with daily objectives,
+              strategic modifiers, score grades and a permanent run history.
             </p>
             <button
               className="primary huge"
@@ -3883,6 +3992,7 @@ export default function Home() {
                   mode: "campaign",
                   campaignDays: 30,
                   scenarioName: "The 30-Day Founder Campaign",
+                  runModifier: selectedModifier,
                 }))
               }
             >
@@ -3917,6 +4027,39 @@ export default function Home() {
               <em>Custom cash · length · market</em>
             </button>
           </div>
+          <div className="modifier-picker">
+            <p>
+              <small>RUN MODIFIER</small>
+              <b>Choose how this attempt will challenge you</b>
+            </p>
+            <div>
+              {(Object.keys(RUN_MODIFIERS) as ModifierKey[]).map((key) => (
+                <button
+                  key={key}
+                  className={selectedModifier === key ? "selected" : ""}
+                  onClick={() => setSelectedModifier(key)}
+                >
+                  <i>{RUN_MODIFIERS[key].icon}</i>
+                  <span>
+                    <b>{RUN_MODIFIERS[key].name}</b>
+                    <small>{RUN_MODIFIERS[key].note}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {runHistory.length > 0 && (
+            <div className="run-history-preview">
+              <small>RECENT RUNS</small>
+              {runHistory.slice(0, 3).map((run) => (
+                <span key={run.id}>
+                  <b>{run.grade}</b>
+                  <em>{run.scenario}</em>
+                  <strong>{run.score.toLocaleString()}</strong>
+                </span>
+              ))}
+            </div>
+          )}
           <button
             className="text-button"
             onClick={() => setGame((g) => ({ ...g, phase: "home" }))}
@@ -4574,6 +4717,30 @@ export default function Home() {
 
           <aside className="action-panel">
             <h3>Founder console</h3>
+            <div
+              className={`daily-objective ${todayObjectiveProgress >= todayObjective.target ? "complete" : ""}`}
+            >
+              <i>{todayObjective.icon}</i>
+              <span>
+                <small>
+                  DAY {game.day} OBJECTIVE · {game.objectiveStreak} DAY STREAK
+                </small>
+                <b>{todayObjective.title}</b>
+                <em>
+                  {todayObjective.note} · Reward {money(todayObjective.reward)}
+                </em>
+                <u>
+                  <strong
+                    style={{
+                      width: `${(todayObjectiveProgress / todayObjective.target) * 100}%`,
+                    }}
+                  />
+                </u>
+              </span>
+              <strong>
+                {todayObjectiveProgress}/{todayObjective.target}
+              </strong>
+            </div>
             <div className="founder-coach">
               <i>✦</i>
               <span>
@@ -5783,8 +5950,22 @@ export default function Home() {
                 : "The campaign changed the operator—and the next run starts with hard-earned judgment."}
             </p>
             <div className="score">
-              {score.toLocaleString()}
-              <small>Founder score</small>
+              <b>{grade}</b> {score.toLocaleString()}
+              <small>
+                Grade · Founder score · {RUN_MODIFIERS[game.runModifier].name}
+              </small>
+            </div>
+            <div className="run-history-final">
+              <h3>Run history</h3>
+              <p>Your last attempts stay on this device.</p>
+              {runHistory.slice(0, 5).map((run) => (
+                <span key={run.id}>
+                  <b>{run.grade}</b>
+                  <em>{run.scenario}</em>
+                  <small>{RUN_MODIFIERS[run.modifier].name}</small>
+                  <strong>{run.score.toLocaleString()}</strong>
+                </span>
+              ))}
             </div>
             <div className="report-numbers">
               <span>
