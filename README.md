@@ -2,6 +2,17 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.2 Simulation Foundation
+
+- Pure deterministic engine for score, demand and rival simulation
+- Seeded customer generation for reproducible challenges
+- Centralized balance configuration
+- Versioned save envelopes with legacy-save compatibility
+- Automated tests for determinism, demand, scoring, rivals and saves
+- Explicit demand explanations in founder coaching
+- Safe early-close control for turn pacing
+- Modular game foundation for V5.3 through V6.0
+
 ## V5.1 Experience Edition
 
 - Five clear navigation areas replace twelve competing console tabs

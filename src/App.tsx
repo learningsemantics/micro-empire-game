@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { BALANCE } from "./game/balance";
+import { calculateDemand, calculateFounderScore as engineScore, clamp, explainDemand, seededUnit, simulateRivalDay } from "./game/engine";
+import { SAVE_KEY, serializeSave, unwrapSave } from "./game/save";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -252,8 +255,6 @@ const initialState: GameState = {
 };
 
 function money(n: number) { return new Intl.NumberFormat("en-CA", { style: "currency", currency: "CAD", maximumFractionDigits: 0 }).format(n); }
-function clamp(n: number, min: number, max: number) { return Math.max(min, Math.min(max, n)); }
-
 export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
@@ -270,9 +271,9 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const saved = localStorage.getItem("micro-empire-save");
+      const saved = localStorage.getItem(SAVE_KEY);
       if (saved) try {
-        const prior = JSON.parse(saved);
+        const {state:prior}=unwrapSave<GameState>(saved);
         const migratedBranches=prior.branches?.length?prior.branches:prior.business?[{id:1,name:`${DISTRICTS[prior.district as DistrictKey].name} Flagship`,city:prior.district,business:prior.business,level:1,inventory:prior.capacity||5,maxInventory:prior.maxCapacity||5,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[prior.district as CityKey]}]:[];
         setGame({ ...initialState, ...prior, branches:migratedBranches,residents:prior.residents?.length?prior.residents:makeResidents(),rivals:prior.rivals?.length?prior.rivals:makeRivals(),neighbourhoodHeat:{...initialState.neighbourhoodHeat,...(prior.neighbourhoodHeat||{})},skills:{...initialState.skills,...(prior.skills||{})},mentorTrust:{...initialState.mentorTrust,...(prior.mentorTrust||{})},staff:(prior.staff||[]).map((m:StaffMember)=>({...m,tenure:m.tenure||0,loyalty:m.loyalty||70})),segmentSales: { ...initialState.segmentSales, ...(prior.segmentSales || {}) }, customer: null, phase: "home" });
       } catch { /* ignore invalid save */ }
@@ -280,7 +281,7 @@ export default function Home() {
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
-  useEffect(() => { if (hydrated) localStorage.setItem("micro-empire-save", JSON.stringify(game)); }, [game, hydrated]);
+  useEffect(() => { if (hydrated) localStorage.setItem(SAVE_KEY, serializeSave(game)); }, [game, hydrated]);
   useEffect(() => { if ("serviceWorker" in navigator) navigator.serviceWorker.register("/micro-empire-game/sw.js").catch(() => undefined); }, []);
 
   const business = game.business ? BUSINESSES[game.business] : null;
@@ -297,8 +298,8 @@ export default function Home() {
   const ltv = averageOrder * Math.min(5, 1 / Math.max(.2, 1 - retention));
   const grossMargin = game.revenue ? (game.revenue - game.totalCogs) / game.revenue : 0;
   const weekKey=Math.floor(Date.now()/604800000);const weeklyTheme=["Community Builder","Cash Discipline","Customer Loyalty","Green Toronto"][weekKey%4];
-  function calculateFounderScore(g:GameState){const share=clamp(100-g.competitors.reduce((sum,c)=>sum+c.share,0),10,65);return Math.round(g.cash*.35+g.reputation*35+g.served*28+share*20+g.storyLog.length*180+g.branches.length*300+g.socialCapital*12+g.leaguePoints*25)}
-  function founderCoach(){if(game.energy<25)return "Your energy is critical. Go home or protect recovery time before making another major decision.";if(game.personalCash<100)return "Personal runway is nearly gone. Work a shift or use credit before housing costs land.";if(game.capacity<=2)return "Your flagship is nearly out of capacity. Restock before demand arrives.";if(game.pmf<50)return "Demand remains uncertain. Interview customers or run an experiment before expanding.";if(game.staff.length<1&&game.served>=5)return "You are becoming the bottleneck. Your first hire can create capacity and resilience.";if(game.branches.length>=game.branchPermits)return "Your portfolio has reached its permit ceiling. Plan the next expansion permit.";return "The fundamentals are stable. Use today to deepen a relationship, improve evidence or build strategic capacity."}
+  function calculateFounderScore(g:GameState){return engineScore({cash:g.cash,reputation:g.reputation,served:g.served,competitorShares:g.competitors.map(c=>c.share),storyDecisions:g.storyLog.length,locations:g.branches.length,socialCapital:g.socialCapital,leaguePoints:g.leaguePoints})}
+  function founderCoach(){if(game.energy<25)return "Your energy is critical. Go home or protect recovery time before making another major decision.";if(game.personalCash<100)return "Personal runway is nearly gone. Work a shift or use credit before housing costs land.";if(game.capacity<=2)return "Your flagship is nearly out of capacity. Restock before demand arrives.";if(game.pmf<50)return "Demand remains uncertain. Interview customers or run an experiment before expanding.";if(game.staff.length<1&&game.served>=5)return "You are becoming the bottleneck. Your first hire can create capacity and resilience.";if(game.branches.length>=game.branchPermits)return "Your portfolio has reached its permit ceiling. Plan the next expansion permit.";return `${explainDemand(cityDemand(game))} Use today to deepen a relationship or build strategic capacity.`}
   function residentDialogue(id:string){const r=game.residents.find(person=>person.id===id);if(!r)return "Let’s see what this business can do.";if(r.relationship>=60)return `I’ve watched you build this from the beginning. I’m rooting for you.`;if(r.relationship>=30)return `Good to see you again. People are starting to talk about this place.`;if(r.relationship<0)return `I remember what happened last time. Show me this will be different.`;return r.personality==="Curious early adopter"?"I’m always willing to try a thoughtful new idea.":`I’m looking for something that respects my time and budget.`}
 
   function beep(tone = 520) {
@@ -318,27 +319,27 @@ export default function Home() {
     setGame({ ...initialState, phase: "play", business: selected, cash: game.cash - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
       district: game.district, founderLocation:game.district as CityKey,branches:[{id:1,name:`${DISTRICTS[game.district].name} Flagship`,city:game.district as CityKey,business:selected,level:1,inventory:max,maxInventory:max,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[game.district as CityKey]}],difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
-      customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0,initialState.residents,1), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
+      customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0,initialState.residents,1,game.seed,1,0), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setWorldView("city");
     setConsoleGroup("business");setOpsTab("trade");
     setShowHelp(true);
   }
 
-  function cityDemand(g:GameState){return WEATHER[g.weather].demand*ECONOMY[g.economy].factor*(1+(g.neighbourhoodHeat[g.district as CityKey]-50)/250)}
-  function makeCustomer(key: BusinessKey, base: number, rep: number, district: DistrictKey, price: number, offer: number, difficulty: DifficultyKey, pmf: number, referrals: number,residents:Resident[]=[],cityFactor=1) {
+  function cityDemand(g:GameState){return calculateDemand(WEATHER[g.weather].demand,ECONOMY[g.economy].factor,g.neighbourhoodHeat[g.district as CityKey])}
+  function makeCustomer(key: BusinessKey, base: number, rep: number, district: DistrictKey, price: number, offer: number, difficulty: DifficultyKey, pmf: number, referrals: number,residents:Resident[]=[],cityFactor=1,simulationSeed=2026,simulationDay=1,turnSalt=0) {
     const local = DISTRICTS[district].segments;
     const all = Object.keys(SEGMENTS) as SegmentKey[];
-    const segment = Math.random() < .78 ? local[Math.floor(Math.random() * local.length)] : all[Math.floor(Math.random() * all.length)];
+    const roll=(salt:number)=>seededUnit(simulationSeed,simulationDay,turnSalt*11+salt);const segment = roll(1) < .78 ? local[Math.floor(roll(2) * local.length)] : all[Math.floor(roll(3) * all.length)];
     const profile = SEGMENTS[segment];
     const offerMultiplier = [.82, 1, 1.28][offer];
-    const value = Math.round(base * price * offerMultiplier * (0.92 + Math.random() * .16) * (1 + Math.max(0, rep - 50) / 300)*cityFactor);
+    const value = Math.round(base * price * offerMultiplier * (0.92 + roll(4) * .16) * (1 + Math.max(0, rep - 50) / 300)*cityFactor);
     const budget = Math.round(profile.budget * (key === "coffee" ? .75 : key === "career" ? 1.15 : 1.8) * DIFFICULTIES[difficulty].budget);
     const fit = local.includes(segment) ? "Strong local fit" : "Visiting segment";
-    const matching=RESIDENT_PROFILES.filter(r=>r.segment===segment);const resident=matching[Math.floor(Math.random()*matching.length)]||RESIDENT_PROFILES[Math.floor(Math.random()*RESIDENT_PROFILES.length)];
-    const memory=residents.find(r=>r.id===resident.id);const returning=Math.random()<clamp(pmf/180+(memory?.loyalty||0)/180,.05,.78);
-    const source = returning ? `Returning resident · loyalty ${memory?.loyalty||10}` : Math.random() < clamp(referrals / 20, 0, .35) ? "Customer referral" : "New acquisition";
-    return { residentId:resident.id,name:resident.name, order: ORDERS[key][Math.floor(Math.random() * ORDERS[key].length)], value, budget, patience: profile.patience + (returning ? 1 : 0), segment, fit, returning, source };
+    const matching=RESIDENT_PROFILES.filter(r=>r.segment===segment);const resident=matching[Math.floor(roll(5)*matching.length)]||RESIDENT_PROFILES[Math.floor(roll(6)*RESIDENT_PROFILES.length)];
+    const memory=residents.find(r=>r.id===resident.id);const returning=roll(7)<clamp(pmf/180+(memory?.loyalty||0)/180,.05,.78);
+    const source = returning ? `Returning resident · loyalty ${memory?.loyalty||10}` : roll(8) < clamp(referrals / 20, 0, .35) ? "Customer referral" : "New acquisition";
+    return { residentId:resident.id,name:resident.name, order: ORDERS[key][Math.floor(roll(9) * ORDERS[key].length)], value, budget, patience: profile.patience + (returning ? 1 : 0), segment, fit, returning, source };
   }
 
   function advance(mutator: (g: GameState) => GameState) {
@@ -356,7 +357,7 @@ export default function Home() {
       }
       const newHour = next.hour + 1;
       next = { ...next, hour: newHour, customer };
-      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals,next.residents,cityDemand(next));
+      if (!next.customer && next.business && newHour < 17) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals,next.residents,cityDemand(next),next.seed,next.day,next.served+next.missed);
       if (newHour >= 17) return closeDay(next);
       return updateQuests(next);
     });
@@ -436,12 +437,13 @@ export default function Home() {
       message: `${kind === "speed" ? "Service system" : kind === "decor" ? "Storefront" : "Capacity"} upgraded!` }));
     beep(820);
   }
+  function endDayEarly(){setGame(g=>closeDay({...g,hour:17,customer:null,message:"You closed early to protect runway, energy and tomorrow’s decision quality."}));beep(390)}
 
   function closeDay(g: GameState): GameState {
     const rentPolicy=g.cityPolicy==="rentcontrol"?.88:1;const rent = Math.round((DISTRICTS[g.district].rent + g.day * 10) * DIFFICULTIES[g.difficulty].rent * (1-g.rentDiscount) * (1-g.skills.finance*.04)*rentPolicy*(.9+g.neighbourhoodHeat[g.district as CityKey]/500));
     const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
     const debtPayment=Math.min(g.debtBalance,Math.round(g.debtBalance*(.02+g.interestRate/350)));
-    const housing=g.housingTier==="studio"?55:25;
+    const housing=BALANCE.personalHousing[g.housingTier];
     let branchRevenue=0,branchCosts=0;
     const branches=g.branches.map((branch,index)=>{const heat=g.neighbourhoodHeat[branch.city];const appreciation=1+(heat-45)/25000*(g.economy==="slowdown"?.4:1);if(index===0)return {...branch,propertyValue:Math.round(branch.propertyValue*appreciation)};const units=Math.min(branch.inventory,1+branch.level+(branch.manager?1:0));const localEvent=g.cityEvent.includes(CITY[branch.city].name)?1.18:1;const earned=Math.round(units*BUSINESSES[branch.business].unit*.62*(.75+g.pmf/200)*WEATHER[g.weather].demand*ECONOMY[g.economy].factor*localEvent);const cost=Math.round(earned*.32+branch.propertyValue*.012*(g.cityPolicy==="rentcontrol"?.9:1));branchRevenue+=earned;branchCosts+=cost;return {...branch,inventory:branch.inventory-units,lifetimeRevenue:branch.lifetimeRevenue+earned,propertyValue:Math.round(branch.propertyValue*appreciation)}});
     if(g.cityPolicy==="green"&&g.supplier==="local")branchCosts=Math.round(branchCosts*.88);
@@ -477,14 +479,14 @@ export default function Home() {
       if(stageUp)window.setTimeout(()=>{setCelebration(`${STAGES[nextStage].icon} ${STAGES[nextStage].name} reached`);window.setTimeout(()=>setCelebration(""),3000)},0);
       const grant=750+g.skills.strategy*150;
       const weather=(['clear','rain','clear','snow','clear','heat'] as WeatherKey[])[(nextDayNumber+g.seed)%6];const economy:EconomyKey=nextDayNumber%11>=8?"slowdown":nextDayNumber%7<=2?"growth":"steady";const interestRate=economy==="growth"?5.75:economy==="slowdown"?4.25:5.25;const ttcStatus=nextDayNumber%7===0?"Line closure":nextDayNumber%4===0?"Major delays":"Good service";const policy:PolicyKey=nextDayNumber%12>=9?"green":nextDayNumber%12>=6?"rentcontrol":nextDayNumber%12>=3?"smallbiz":"none";const cityEvents=["Kensington Night Market","Toronto Tech Week at MaRS","Harbourfront Tourism Surge","Liberty Village Construction","Financial District Conference","Junction Street Festival"];const cityEvent=cityEvents[nextDayNumber%cityEvents.length];const neighbourhoodHeat=Object.fromEntries((Object.keys(g.neighbourhoodHeat) as CityKey[]).map((key,i)=>[key,clamp(g.neighbourhoodHeat[key]+((nextDayNumber+i)%3-1)*3+(economy==="growth"?2:economy==="slowdown"?-2:0),25,95)])) as Record<CityKey,number>;
-      const playerScore=calculateFounderScore(g);const rivals=g.rivals.map((r,i)=>{const expansion=(nextDayNumber+i)%(11-r.momentum)===0?1:0;const allianceBoost=r.relationship>=35?1.08:1;const earned=Math.round((180+r.momentum*45+r.locations*70)*ECONOMY[economy].factor*allianceBoost);const reputation=clamp(r.reputation+((nextDayNumber+i)%3-1)+(r.strategy.includes("Relationship")?1:0),30,95);const locations=Math.min(5,r.locations+expansion);return {...r,cash:r.cash+earned-locations*45,reputation,locations,score:Math.round(r.score+earned*.45+reputation*5+locations*90)}});const leagueGain=rivals.filter(r=>playerScore>r.score).length;
+      const playerScore=calculateFounderScore(g);const rivals=simulateRivalDay(g.rivals,nextDayNumber,economy);const leagueGain=rivals.filter(r=>playerScore>r.score).length;
       const next = ev.apply({ ...g, day: nextDayNumber, hour: 9, phase: "play",weather,economy,interestRate,ttcStatus,cityPolicy:policy,cityEvent,neighbourhoodHeat,rivals,leaguePoints:g.leaguePoints+leagueGain,cityEventLog:[`${nextDayNumber}: ${cityEvent} · ${WEATHER[weather].name} · ${ECONOMY[economy].name}`,...g.cityEventLog].slice(0,8),event: stageUp ? `${STAGES[nextStage].name} unlocked! ${money(grant)} grant, +3 capacity and a skill point.` : `${cityEvent}. ${WEATHER[weather].note}.`,
         dailyRevenue: 0, dailyExpenses: 0, dailyCogs: 0, dailyPayroll: 0, decision: null,
         cash: g.cash + (stageUp ? grant : 0),skillPoints:g.skillPoints+(stageUp?1:0),energy:clamp(g.energy+(g.housingTier==="studio"?27:18),0,100),stress:clamp(g.stress-(g.housingTier==="studio"?18:12),0,100),focus:clamp(g.focus+10,0,100),maxCapacity: g.maxCapacity + (stageUp ? 3 : 0), capacity: stageUp ? g.maxCapacity + 3 : g.capacity,
         reputation: clamp(g.reputation + (stageUp ? 5 : 0), 0, 100), stageRewarded: Math.max(g.stageRewarded, nextStage),
         staff: g.staff.map(member => ({ ...member,tenure:member.tenure+1,loyalty:clamp(member.loyalty+(member.morale>=70?2:-2),20,100),morale: clamp(member.morale + 8, 20, 100) })),residents:g.residents.map((r,i)=>{const destinations:CityKey[]=[r.home,"financial","liberty","mars","harbour","kensington","cityhall"];const location=destinations[(nextDayNumber+i)%destinations.length];return {...r,location,mood:r.relationship>=40?"Looking forward to seeing you":r.loyalty>=35?"Open to another visit":["Busy","Curious","Social","Price-conscious"][(i+nextDayNumber)%4]}}),
         message: stageUp ? `Welcome to ${STAGES[nextStage].name}. Your operating ceiling just expanded.` : `Day ${nextDayNumber} begins. ${ev.text}` });
-      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals,next.residents,cityDemand(next));
+      if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals,next.residents,cityDemand(next),next.seed,next.day,next.served+next.missed);
       return next;
     });
     setShowBriefing(true);
@@ -513,7 +515,7 @@ export default function Home() {
     });
   }
 
-  function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); setWorldView("city");setConsoleGroup("business");setOpsTab("trade"); beep(400); }
+  function reset() { localStorage.removeItem(SAVE_KEY); setGame(initialState); setSelected("coffee"); setWorldView("city");setConsoleGroup("business");setOpsTab("trade"); beep(400); }
 
   function prepareDailyChallenge() {
     const dateKey = Number(new Date().toISOString().slice(0,10).replaceAll("-",""));
@@ -572,14 +574,14 @@ export default function Home() {
   function restFounder(){advance(g=>({...g,energy:clamp(g.energy+35,0,100),stress:clamp(g.stress-24,0,100),focus:clamp(g.focus+18,0,100),message:"You protected an hour for recovery. Energy and judgment improved."}));beep(430)}
   function travelTo(destination:CityKey){if(destination===game.founderLocation)return;const mode=TRANSPORT[game.transport];const disruption=game.transport==="ttc"&&game.ttcStatus!=="Good service"?3:0;const fare=game.transport==="ttc"&&game.transitPass?0:mode.fare;const weatherCost=game.transport==="walk"||game.transport==="bike"?WEATHER[game.weather].travel:0;advance(g=>({...g,personalCash:g.personalCash-fare,founderLocation:destination,placesVisited:g.placesVisited.includes(destination)?g.placesVisited:[...g.placesVisited,destination],energy:clamp(g.energy-mode.energy-disruption-weatherCost,0,100),stress:clamp(g.stress+disruption,0,100),health:clamp(g.health+(g.transport==="walk"&&g.weather==="clear"?2:g.transport==="bike"&&g.weather==="clear"?1:weatherCost?-1:0),0,100),message:`You travelled by ${mode.name.toLowerCase()} to ${CITY[destination].name}. ${game.transport==="ttc"?game.ttcStatus+". ":""}${WEATHER[g.weather].name} conditions shaped the trip.`}));beep(510)}
   function cityAction(){const key=game.founderLocation;if(key===game.homeLocation){restFounder();return}if(key===(game.district as CityKey)){setWorldView("business");setGame(g=>({...g,message:`You arrived at ${BUSINESSES[g.business!].name}. The operating floor is ready.`}));return}if(key==="mars"&&game.personalCash>=80)advance(g=>({...g,personalCash:g.personalCash-80,network:clamp(g.network+8,0,100),skillPoints:g.skillPoints+1,message:"A MaRS workshop added one skill point and expanded your founder network."}));if(key==="cityhall"&&game.cash>=100)advance(g=>({...g,cash:g.cash-100,expenses:g.expenses+100,dailyExpenses:g.dailyExpenses+100,permitLevel:Math.min(3,g.permitLevel+1),reputation:clamp(g.reputation+4,0,100),message:"Your city permit level increased. Compliance builds neighbourhood trust."}));if(key==="kensington")advance(g=>({...g,network:clamp(g.network+12,0,100),referrals:g.referrals+2,stress:clamp(g.stress-5,0,100),message:"A Kensington founder meetup produced two referrals and stronger connections."}));if(key==="financial"){if(game.funding==="bootstrapped")chooseFunding("debt");else advance(g=>({...g,focus:clamp(g.focus+12,0,100),message:"A banker reviewed your runway and sharpened your financing plan."}))}if(key==="yorkville"){if(game.funding==="bootstrapped")chooseFunding("angel");else advance(g=>({...g,network:clamp(g.network+10,0,100),reputation:clamp(g.reputation+3,0,100),message:"An investor gathering strengthened your network and visibility."}))}if(key==="harbour")advance(g=>({...g,interviews:g.interviews+2,insights:g.insights+2,pmf:clamp(g.pmf+3+g.skills.discovery,0,100),message:"Waterfront observation generated two customer interviews and a new demand signal."}));if(key==="liberty")advance(g=>({...g,network:clamp(g.network+8,0,100),pmf:clamp(g.pmf+2,0,100),message:"A Liberty Village operator introduced you to the local B2B community."}));beep(690)}
-  function buyTransitPass(){if(game.transitPass||game.personalCash<180)return;setGame(g=>({...g,personalCash:g.personalCash-180,transitPass:true,message:"TTC founder pass activated. TTC travel is now fare-free."}));beep(620)}
+  function buyTransitPass(){if(game.transitPass||game.personalCash<BALANCE.transitPass)return;setGame(g=>({...g,personalCash:g.personalCash-BALANCE.transitPass,transitPass:true,message:"TTC founder pass activated. TTC travel is now fare-free."}));beep(620)}
   function upgradeHousing(){if(game.housingTier==="studio"||game.personalCash<800)return;setGame(g=>({...g,personalCash:g.personalCash-800,housingTier:"studio",energy:clamp(g.energy+20,0,100),message:"You moved into a studio. Higher daily housing cost buys stronger recovery."}));beep(740)}
   function chooseJob(key:JobKey){if(game.educationCredits<JOBS[key].requirement)return;setGame(g=>({...g,job:key,message:key==="none"?"You committed fully to the venture. Personal runway now matters more.":`${JOBS[key].name} added as your income safety net.`}));beep(580)}
   function workShift(){const job=JOBS[game.job];if(game.job==="none"||game.energy<job.energy)return;advance(g=>({...g,personalCash:g.personalCash+job.pay,energy:clamp(g.energy-job.energy,0,100),stress:clamp(g.stress+5,0,100),health:clamp(g.health-(g.energy<35?3:0),0,100),shiftsWorked:g.shiftsWorked+1,message:`${job.name} completed. ${money(job.pay)} added to personal cash, but the shift consumed founder energy.`}));beep(640)}
-  function study(){if(game.personalCash<150)return;advance(g=>({...g,personalCash:g.personalCash-150,educationCredits:g.educationCredits+1,skillPoints:g.skillPoints+1,focus:clamp(g.focus+10,0,100),message:"You completed a practical founder course. +1 education credit and +1 skill point."}));beep(820)}
-  function usePersonalCredit(){if(game.creditScore<600||game.personalDebt>0)return;setGame(g=>({...g,personalCash:g.personalCash+500,personalDebt:575,creditScore:clamp(g.creditScore-10,300,850),message:"A $500 personal credit advance created a $575 repayment obligation."}));beep(520)}
+  function study(){if(game.personalCash<BALANCE.founderCourse)return;advance(g=>({...g,personalCash:g.personalCash-BALANCE.founderCourse,educationCredits:g.educationCredits+1,skillPoints:g.skillPoints+1,focus:clamp(g.focus+10,0,100),message:"You completed a practical founder course. +1 education credit and +1 skill point."}));beep(820)}
+  function usePersonalCredit(){if(game.creditScore<600||game.personalDebt>0)return;setGame(g=>({...g,personalCash:g.personalCash+BALANCE.personalCreditAdvance,personalDebt:BALANCE.personalCreditRepayment,creditScore:clamp(g.creditScore-10,300,850),message:"A $500 personal credit advance created a $575 repayment obligation."}));beep(520)}
   function repayPersonalDebt(){const payment=Math.min(200,game.personalDebt,game.personalCash);if(payment<=0)return;setGame(g=>({...g,personalCash:g.personalCash-payment,personalDebt:g.personalDebt-payment,creditScore:clamp(g.creditScore+8,300,850),message:`You repaid ${money(payment)} of personal debt. Credit resilience improved.`}));beep(720)}
-  function buyBike(){if(game.ownsBike||game.personalCash<350)return;setGame(g=>({...g,personalCash:g.personalCash-350,ownsBike:true,transport:"bike",health:clamp(g.health+3,0,100),message:"You bought a city bike. Travel is now free and lightly restorative."}));beep(680)}
+  function buyBike(){if(game.ownsBike||game.personalCash<BALANCE.bikePrice)return;setGame(g=>({...g,personalCash:g.personalCash-BALANCE.bikePrice,ownsBike:true,transport:"bike",health:clamp(g.health+3,0,100),message:"You bought a city bike. Travel is now free and lightly restorative."}));beep(680)}
   function chooseTransport(key:TransportKey){if(key==="bike"&&!game.ownsBike)return;setGame(g=>({...g,transport:key,message:`${TRANSPORT[key].name} selected for city travel. ${TRANSPORT[key].note}.`}));}
   function buyBranchPermit(){const cost=350+game.branchPermits*150;if(game.cash<cost)return;setGame(g=>({...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branchPermits:g.branchPermits+1,permitLevel:Math.min(3,g.permitLevel+1),message:`Expansion permit ${g.branchPermits+1} approved for ${money(cost)}.`}));beep(700)}
   function openBranch(business:BusinessKey){const city=game.founderLocation;if(game.branches.some(b=>b.city===city)||game.branches.length>=game.branchPermits)return;const max=business==="coffee"?8:business==="career"?6:4;const cost=PROPERTY_COST[city]+BUSINESSES[business].cost;if(game.cash<cost)return;const branch:Branch={id:Date.now(),name:`${CITY[city].name} ${BUSINESSES[business].name}`,city,business,level:1,inventory:max,maxInventory:max,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[city]};setGame(g=>({...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branches:[...g.branches,branch],reputation:clamp(g.reputation+5,0,100),message:`${branch.name} acquired for ${money(cost)}. It begins passive operations at daily close.`}));beep(880)}
@@ -650,8 +652,8 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">V5.1 · Experience Edition</div>
-            <p className="lede">Live your Toronto founder story through a clearer journey, memorable people and a city that feels alive.</p>
+            <div className="ribbon">V5.2 · Simulation Foundation</div>
+            <p className="lede">A deterministic, tested Toronto founder simulation—now safer to balance, extend and share.</p>
             <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "modes" }))}>Choose game mode <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
@@ -769,6 +771,7 @@ export default function Home() {
               <button className="action serve" onClick={serve} disabled={!game.customer || game.capacity <= 0}><b>Serve customer</b><span>Earn revenue · build reputation</span></button>
               <button className="action" onClick={restock} disabled={game.capacity === game.maxCapacity}><b>Restock</b><span>Via {SUPPLIERS[game.supplier].name}</span></button>
               <button className="action" onClick={promote}><b>Local marketing</b><span>{money(75 + game.marketing * 25)} · reputation +7</span></button>
+              <button className="action close-early" onClick={endDayEarly}><b>Close for the day</b><span>Skip remaining hours · settle today’s books</span></button>
               <div className="upgrade-box"><h4>Upgrades</h4><button onClick={() => upgrade("speed")}><span>⚡ Service</span><b>Lv {game.speed}</b></button><button onClick={() => upgrade("decor")}><span>✦ Storefront</span><b>Lv {game.decor}</b></button><button onClick={() => upgrade("capacity")}><span>▦ Capacity</span><b>{game.maxCapacity}</b></button></div>
             </>}
             {opsTab === "team" && <div className="ops-list"><h4>Your team · {money(game.staff.reduce((s,m)=>s+m.salary,0))}/day</h4>
