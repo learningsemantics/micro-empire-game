@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V4.4 Dynamic Toronto Edition
+
+- Changing weather with demand and travel consequences
+- TTC delays and closures that affect founder energy and stress
+- Growth, stable and slowdown economic cycles
+- Variable interest rates, rents and financing payments
+- Rotating city policies, grants and green-business incentives
+- Major Toronto events and evolving neighbourhood heat
+- Condition-driven branch revenue and property appreciation
+
 ## V4.3 Living Population Edition
 
 - Twelve persistent Toronto residents with homes, roles, segments and personalities
