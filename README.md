@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.3 Stories & Characters
+
+- Six founder archetypes with distinct strategic advantages
+- Multi-stage story arcs featuring residents, employees, mentors and rivals
+- Cinematic dialogue scenes with consequential choices
+- Persistent story inbox that records important callbacks
+- Delayed consequences that return on later days
+- Story decisions that affect cash, reputation, morale, loyalty and relationships
+- Character-driven founder identity decisions as the company grows
+
 ## V5.2 Simulation Foundation
 
 - Pure deterministic engine for score, demand and rival simulation
