@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.4 Campaign & Missions
+
+- Four campaign chapters spanning customers, validation, leadership, community and expansion
+- Eight simulation-driven missions with visible progress
+- Claimable cash, campaign XP, league points and skill-point rewards
+- Sequential chapter unlocking that creates a clear founder journey
+- Mission streak tracking and campaign completion state
+- Campaign Desk story messages that connect objectives to the character system
+- Automated campaign progression and chapter-gating tests
+
 ## V5.3 Stories & Characters
 
 - Six founder archetypes with distinct strategic advantages

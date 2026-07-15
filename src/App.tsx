@@ -3,6 +3,12 @@
 import { useEffect, useState } from "react";
 import { BALANCE } from "./game/balance";
 import {
+  CAMPAIGN_MISSIONS,
+  chapterUnlocked,
+  missionProgress,
+  type MissionSnapshot,
+} from "./game/campaign";
+import {
   calculateDemand,
   calculateFounderScore as engineScore,
   clamp,
@@ -246,6 +252,9 @@ type GameState = {
   storyInbox: StoryMessage[];
   pendingConsequences: PendingConsequence[];
   storyChoices: string[];
+  claimedMissionIds: string[];
+  campaignXp: number;
+  missionStreak: number;
   segmentSales: Record<SegmentKey, number>;
   customer: null | {
     residentId: string;
@@ -1280,6 +1289,9 @@ const initialState: GameState = {
   ],
   pendingConsequences: [],
   storyChoices: [],
+  claimedMissionIds: [],
+  campaignXp: 0,
+  missionStreak: 0,
   competitors: [
     { name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 },
     { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 },
@@ -1434,6 +1446,21 @@ export default function Home() {
     "Customer Loyalty",
     "Green Toronto",
   ][weekKey % 4];
+  const missionSnapshot: MissionSnapshot = {
+    served: game.served,
+    interviews: game.interviews,
+    reputation: game.reputation,
+    staff: game.staff.length,
+    socialCapital: game.socialCapital,
+    storyChoices: game.storyChoices.length,
+    branches: game.branches.length,
+    leaguePoints: game.leaguePoints,
+  };
+  const availableMissions = CAMPAIGN_MISSIONS.filter((mission) =>
+    chapterUnlocked(mission.chapter, game.claimedMissionIds),
+  );
+  const campaignComplete =
+    game.claimedMissionIds.length === CAMPAIGN_MISSIONS.length;
   function calculateFounderScore(g: GameState) {
     return engineScore({
       cash: g.cash,
@@ -3217,6 +3244,40 @@ export default function Home() {
     }));
     beep(860);
   }
+  function claimMission(id: string) {
+    const mission = CAMPAIGN_MISSIONS.find((item) => item.id === id);
+    if (
+      !mission ||
+      game.claimedMissionIds.includes(id) ||
+      !chapterUnlocked(mission.chapter, game.claimedMissionIds) ||
+      missionProgress(mission, missionSnapshot) < mission.target
+    )
+      return;
+    setGame((g) => ({
+      ...g,
+      cash: g.cash + mission.rewardCash,
+      revenue: g.revenue + mission.rewardCash,
+      campaignXp: g.campaignXp + mission.rewardXp,
+      missionStreak: g.missionStreak + 1,
+      claimedMissionIds: [...g.claimedMissionIds, id],
+      skillPoints:
+        g.skillPoints + ((g.claimedMissionIds.length + 1) % 2 === 0 ? 1 : 0),
+      leaguePoints: g.leaguePoints + 5,
+      storyInbox: [
+        {
+          day: g.day,
+          from: "Campaign Desk",
+          text: `${mission.title} complete. The next chapter of your Toronto founder campaign is taking shape.`,
+          tone: "warm",
+        },
+        ...g.storyInbox,
+      ],
+      message: `Mission complete: ${mission.title}. +${money(mission.rewardCash)} and ${mission.rewardXp} campaign XP.`,
+    }));
+    setCelebration(`Mission complete · ${mission.title}`);
+    window.setTimeout(() => setCelebration(""), 2600);
+    beep(920);
+  }
   function resolveCharacterEvent(choice: "a" | "b") {
     setGame((g) => {
       const id = g.characterEvent;
@@ -3779,10 +3840,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.3 · Stories &amp; Characters</div>
+            <div className="ribbon">V5.4 · Campaign &amp; Missions</div>
             <p className="lede">
-              Build a Toronto company through relationships, rivalries and
-              choices whose consequences return days later.
+              Turn your Toronto founder story into a chaptered campaign with
+              missions, rewards and a path from first customer to city stage.
             </p>
             <button
               className="primary huge"
@@ -4831,6 +4892,80 @@ export default function Home() {
             )}
             {opsTab === "lead" && (
               <div className="ops-list leadership-lab">
+                <h4>Toronto campaign</h4>
+                <div className="campaign-summary">
+                  <span>
+                    <small>Campaign XP</small>
+                    <b>{game.campaignXp}</b>
+                  </span>
+                  <span>
+                    <small>Missions</small>
+                    <b>
+                      {game.claimedMissionIds.length}/{CAMPAIGN_MISSIONS.length}
+                    </b>
+                  </span>
+                  <span>
+                    <small>Streak</small>
+                    <b>{game.missionStreak} ◆</b>
+                  </span>
+                </div>
+                {campaignComplete && (
+                  <div className="campaign-complete">
+                    <i>♛</i>
+                    <span>
+                      <strong>Toronto campaign complete</strong>
+                      <small>
+                        You built an enterprise with customers, a team,
+                        relationships and citywide ambition.
+                      </small>
+                    </span>
+                  </div>
+                )}
+                <div className="mission-board">
+                  {availableMissions
+                    .filter(
+                      (mission) => !game.claimedMissionIds.includes(mission.id),
+                    )
+                    .slice(0, 3)
+                    .map((mission) => {
+                      const progress = missionProgress(
+                        mission,
+                        missionSnapshot,
+                      );
+                      const complete = progress >= mission.target;
+                      return (
+                        <article
+                          className={complete ? "mission ready" : "mission"}
+                          key={mission.id}
+                        >
+                          <i>{mission.icon}</i>
+                          <span>
+                            <small>Chapter {mission.chapter}</small>
+                            <strong>{mission.title}</strong>
+                            <p>{mission.story}</p>
+                            <u>
+                              <b
+                                style={{
+                                  width: `${(progress / mission.target) * 100}%`,
+                                }}
+                              />
+                            </u>
+                            <em>
+                              {progress}/{mission.target} ·{" "}
+                              {money(mission.rewardCash)} · {mission.rewardXp}{" "}
+                              XP
+                            </em>
+                          </span>
+                          <button
+                            disabled={!complete}
+                            onClick={() => claimMission(mission.id)}
+                          >
+                            {complete ? "Claim" : "Active"}
+                          </button>
+                        </article>
+                      );
+                    })}
+                </div>
                 <h4>Founder identity</h4>
                 <p className="intel">
                   Choose one path. Its advantage becomes part of the simulation.

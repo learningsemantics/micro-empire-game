@@ -3444,3 +3444,126 @@ button:focus-visible {
     font-size: 30px;
   }
 }
+.campaign-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.campaign-summary span {
+  background: #173f45;
+  color: white;
+  border-radius: 9px;
+  padding: 9px;
+}
+.campaign-summary small,
+.campaign-summary b {
+  display: block;
+}
+.campaign-summary small {
+  font-size: 6px;
+  text-transform: uppercase;
+  color: #9fc7c1;
+}
+.campaign-summary b {
+  font-size: 15px;
+  margin-top: 3px;
+}
+.mission-board {
+  display: grid;
+  gap: 7px;
+}
+.mission {
+  display: grid !important;
+  grid-template-columns: 30px 1fr auto;
+  gap: 8px;
+  align-items: center;
+  border-left: 4px solid #6c58a2 !important;
+}
+.mission.ready {
+  border-left-color: #20a87a !important;
+  background: #eff9e8 !important;
+}
+.mission > i {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #6c58a2;
+  color: white;
+  font-style: normal;
+}
+.mission > span {
+  display: flex;
+  flex-direction: column;
+}
+.mission small {
+  font-size: 6px;
+  text-transform: uppercase;
+  color: #6c58a2;
+}
+.mission p {
+  font-size: 8px;
+  margin: 3px 0;
+}
+.mission u {
+  height: 5px;
+  background: #d7d2c5;
+  border-radius: 6px;
+  overflow: hidden;
+  text-decoration: none;
+}
+.mission u b {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6c58a2, #20a87a);
+}
+.mission em {
+  font-size: 7px;
+  font-style: normal;
+  margin-top: 4px;
+}
+.mission > button {
+  border: 0;
+  border-radius: 7px;
+  background: #20a87a;
+  color: white;
+  padding: 8px;
+  font-size: 7px;
+  font-weight: 900;
+}
+.mission > button:disabled {
+  background: #b8b5aa;
+}
+.campaign-complete {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 9px;
+  align-items: center;
+  background: linear-gradient(135deg, #f0b946, #fff3cd);
+  border-radius: 10px;
+  padding: 10px;
+}
+.campaign-complete > i {
+  font-size: 30px;
+  font-style: normal;
+}
+.campaign-complete span {
+  display: flex;
+  flex-direction: column;
+}
+.campaign-complete small {
+  font-size: 7px;
+  margin-top: 3px;
+}
+@media (max-width: 600px) {
+  .mission {
+    grid-template-columns: 28px 1fr;
+  }
+  .mission > button {
+    grid-column: 1/-1;
+  }
+  .campaign-summary {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
