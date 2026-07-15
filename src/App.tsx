@@ -26,6 +26,16 @@ import {
   type ObjectiveSnapshot,
 } from "./game/replay";
 import { CRISES, crisisForDay, shouldTriggerCrisis } from "./game/crisis";
+import {
+  EMPTY_PROFILE,
+  FOUNDER_TRIALS,
+  META_BADGES,
+  earnedBadges,
+  founderLevel,
+  runXp,
+  xpToNextLevel,
+  type FounderProfile,
+} from "./game/progression";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -1380,6 +1390,8 @@ export default function Home() {
       day: number;
     }>
   >([]);
+  const [founderProfile, setFounderProfile] =
+    useState<FounderProfile>(EMPTY_PROFILE);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -1445,6 +1457,14 @@ export default function Home() {
       } catch {
         setRunHistory([]);
       }
+      try {
+        setFounderProfile({
+          ...EMPTY_PROFILE,
+          ...JSON.parse(localStorage.getItem("micro-empire-profile") || "{}"),
+        });
+      } catch {
+        setFounderProfile(EMPTY_PROFILE);
+      }
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
@@ -1474,6 +1494,36 @@ export default function Home() {
     });
   }, [game.phase, game.runId, hydrated]);
   useEffect(() => {
+    if (!hydrated || game.phase !== "result" || !game.runId) return;
+    setFounderProfile((profile) => {
+      if (profile.processedRuns.includes(game.runId)) return profile;
+      const finalScore = Math.round(
+        calculateFounderScore(game) * RUN_MODIFIERS[game.runModifier].score,
+      );
+      const finalGrade = scoreGrade(finalScore);
+      const earned = runXp(
+        finalScore,
+        game.completedObjectives,
+        game.claimedMissionIds.length,
+      );
+      const badges = earnedBadges({
+        grade: finalGrade,
+        ethics: game.ethicsScore,
+        crises: game.crisisHistory.length,
+        missions: game.claimedMissionIds.length,
+        branches: game.branches.length,
+      });
+      const next = {
+        xp: profile.xp + earned,
+        completedRuns: profile.completedRuns + 1,
+        processedRuns: [...profile.processedRuns, game.runId].slice(-30),
+        badges: [...new Set([...profile.badges, ...badges])],
+      };
+      localStorage.setItem("micro-empire-profile", JSON.stringify(next));
+      return next;
+    });
+  }, [game.phase, game.runId, hydrated]);
+  useEffect(() => {
     if ("serviceWorker" in navigator)
       navigator.serviceWorker
         .register("/micro-empire-game/sw.js")
@@ -1490,6 +1540,13 @@ export default function Home() {
     calculateFounderScore(game) * RUN_MODIFIERS[game.runModifier].score,
   );
   const grade = scoreGrade(score);
+  const currentFounderLevel = founderLevel(founderProfile.xp);
+  const nextFounderLevel = xpToNextLevel(founderProfile.xp);
+  const earnedRunXp = runXp(
+    score,
+    game.completedObjectives,
+    game.claimedMissionIds.length,
+  );
   const todayObjective = dailyObjective(game.seed, game.day);
   const objectiveNow: ObjectiveSnapshot = {
     served: game.served,
@@ -2676,6 +2733,26 @@ export default function Home() {
       scenarioName: `Daily Challenge · ${new Date().toLocaleDateString("en-CA")}`,
       seed: dateKey,
       runModifier: "pressure",
+    });
+  }
+
+  function launchFounderTrial(id: string) {
+    const trial = FOUNDER_TRIALS.find((item) => item.id === id);
+    if (!trial || currentFounderLevel.level < trial.level) return;
+    setSelected(trial.business as BusinessKey);
+    setSelectedModifier(trial.modifier as ModifierKey);
+    setGame({
+      ...initialState,
+      phase: "district",
+      business: trial.business as BusinessKey,
+      district: trial.district as DistrictKey,
+      difficulty: trial.difficulty as DifficultyKey,
+      mode: "custom",
+      campaignDays: trial.days,
+      cash: trial.cash,
+      scenarioName: trial.name,
+      seed: trial.seed,
+      runModifier: trial.modifier as ModifierKey,
     });
   }
 
@@ -4009,10 +4086,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.6 · Events &amp; Decisions</div>
+            <div className="ribbon">V5.7 · Progression &amp; Rewards</div>
             <p className="lede">
-              Face economic shocks, operational crises and ethical decisions
-              whose consequences reshape the days ahead.
+              Grow a persistent founder profile, collect badges and unlock new
+              Toronto trials with every completed run.
             </p>
             <button
               className="primary huge"
@@ -4028,6 +4105,17 @@ export default function Home() {
                 Continue saved game · Day {game.day}
               </button>
             )}
+            <div className="founder-profile-chip">
+              <i>{currentFounderLevel.icon}</i>
+              <span>
+                <small>FOUNDER LEVEL {currentFounderLevel.level}</small>
+                <b>{currentFounderLevel.name}</b>
+                <em>
+                  {founderProfile.xp} XP · {founderProfile.badges.length}/
+                  {Object.keys(META_BADGES).length} badges
+                </em>
+              </span>
+            </div>
           </div>
           <Neighbourhood active={game.business || "coffee"} people={6} />
         </section>
@@ -4120,6 +4208,36 @@ export default function Home() {
               ))}
             </div>
           )}
+          <div className="founder-trials">
+            <p>
+              <small>FOUNDER PROGRESSION</small>
+              <b>Unlockable Toronto trials</b>
+            </p>
+            <div>
+              {FOUNDER_TRIALS.map((trial) => {
+                const unlocked = currentFounderLevel.level >= trial.level;
+                return (
+                  <button
+                    key={trial.id}
+                    className={unlocked ? "unlocked" : "locked"}
+                    disabled={!unlocked}
+                    onClick={() => launchFounderTrial(trial.id)}
+                  >
+                    <i>{unlocked ? trial.icon : "×"}</i>
+                    <span>
+                      <small>
+                        {unlocked
+                          ? "UNLOCKED"
+                          : `LEVEL ${trial.level} REQUIRED`}
+                      </small>
+                      <b>{trial.name}</b>
+                      <em>{trial.note}</em>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <button
             className="text-button"
             onClick={() => setGame((g) => ({ ...g, phase: "home" }))}
@@ -6085,6 +6203,45 @@ export default function Home() {
               <small>
                 Grade · Founder score · {RUN_MODIFIERS[game.runModifier].name}
               </small>
+            </div>
+            <div className="progression-reward">
+              <i>{currentFounderLevel.icon}</i>
+              <span>
+                <small>FOUNDER PROGRESSION</small>
+                <b>
+                  +{earnedRunXp} XP · Level {currentFounderLevel.level}
+                </b>
+                <em>{currentFounderLevel.name}</em>
+                {nextFounderLevel && (
+                  <u>
+                    <strong
+                      style={{
+                        width: `${Math.min(100, (nextFounderLevel.current / nextFounderLevel.required) * 100)}%`,
+                      }}
+                    />
+                  </u>
+                )}
+              </span>
+            </div>
+            <div className="meta-badges">
+              {Object.entries(META_BADGES).map(([id, badge]) => {
+                const unlocked =
+                  founderProfile.badges.includes(id) ||
+                  earnedBadges({
+                    grade,
+                    ethics: game.ethicsScore,
+                    crises: game.crisisHistory.length,
+                    missions: game.claimedMissionIds.length,
+                    branches: game.branches.length,
+                  }).includes(id);
+                return (
+                  <div key={id} className={unlocked ? "unlocked" : "locked"}>
+                    <i>{badge.icon}</i>
+                    <b>{badge.name}</b>
+                    <small>{badge.note}</small>
+                  </div>
+                );
+              })}
             </div>
             <div className="run-history-final">
               <h3>Run history</h3>

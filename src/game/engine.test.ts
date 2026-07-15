@@ -18,6 +18,13 @@ import {
   scoreGrade,
 } from "./replay";
 import { crisisForDay, shouldTriggerCrisis } from "./crisis";
+import {
+  FOUNDER_TRIALS,
+  earnedBadges,
+  founderLevel,
+  runXp,
+  xpToNextLevel,
+} from "./progression";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -128,6 +135,31 @@ describe("crisis engine", () => {
   it("selects crises deterministically from seed and day", () => {
     expect(crisisForDay(2026, 10)).toEqual(crisisForDay(2026, 10));
     expect(crisisForDay(2026, 10).a.effect.days).toBeGreaterThan(0);
+  });
+});
+
+describe("founder progression", () => {
+  it("advances levels at stable XP thresholds", () => {
+    expect(founderLevel(0).level).toBe(1);
+    expect(founderLevel(600).level).toBe(3);
+    expect(xpToNextLevel(600)?.next.level).toBe(4);
+  });
+
+  it("rewards stronger runs and detects earned badges", () => {
+    expect(runXp(10000, 5, 4)).toBeGreaterThan(runXp(3000, 0, 0));
+    expect(
+      earnedBadges({
+        grade: "A",
+        ethics: 75,
+        crises: 4,
+        missions: 8,
+        branches: 3,
+      }),
+    ).toContain("grade_a");
+  });
+
+  it("assigns increasing level requirements to founder trials", () => {
+    expect(FOUNDER_TRIALS.map((trial) => trial.level)).toEqual([2, 3, 4]);
   });
 });
 

@@ -2,6 +2,17 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.7 Progression & Rewards
+
+- Six persistent founder levels from Neighbourhood Starter to Micro Empire Architect
+- Founder XP rewards based on score, objectives and campaign missions
+- Six collectible meta badges spanning ethics, crises, expansion and performance
+- Three unlockable Toronto trials with distinct starting conditions
+- Persistent local founder profile that survives business resets
+- Level and badge presentation across the home, mode and final-report screens
+- Automatic duplicate-run protection for progression rewards
+- Automated tests for XP, level thresholds, badges and unlock requirements
+
 ## V5.6 Events & Decisions
 
 - Five deterministic crisis families covering supply, privacy, rent, staffing and city emergencies
