@@ -2,6 +2,15 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V4.1 Life Economy Edition
+
+- Separate personal and business finances
+- Employment paths and paid shifts for personal runway
+- Founder health, credit score and personal debt
+- Education credits that unlock better work and skill points
+- Walking, TTC, cycling and rideshare transportation strategies
+- Personal housing costs, credit repayments and end-of-campaign wealth reporting
+
 ## V4.0 Living Toronto Edition
 
 - Explore an interactive Toronto map with eight destinations
