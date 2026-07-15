@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.0 Toronto Founder League
+
+- Five persistent rival founders with distinct strategies
+- Rival cash, reputation, momentum, scoring and business expansion
+- Live citywide founder leaderboard
+- Cooperative rival partnerships and formal alliances
+- Competitive founder challenges with season points
+- Rotating weekly shared objectives
+- Portable league codes for asynchronous community competition
+
 ## V4.4 Dynamic Toronto Edition
 
 - Changing weather with demand and travel consequences
