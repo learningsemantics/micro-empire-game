@@ -18,6 +18,7 @@ type SkillKey = "discovery" | "finance" | "leadership" | "negotiation" | "strate
 type FundingKey = "bootstrapped" | "debt" | "angel";
 type JobKey = "none" | "cafe" | "freelance" | "consultant";
 type TransportKey = "walk" | "ttc" | "bike" | "rideshare";
+type Branch = { id:number; name:string; city:CityKey; business:BusinessKey; level:number; inventory:number; maxInventory:number; manager:string | null; lifetimeRevenue:number; propertyValue:number };
 type Phase = "home" | "modes" | "scenario" | "select" | "district" | "play" | "dayEnd" | "decision" | "negotiation" | "result";
 
 type GameState = {
@@ -76,6 +77,7 @@ type GameState = {
   personalCash: number; personalDebt: number; creditScore: number; health: number;
   job: JobKey; shiftsWorked: number; educationCredits: number;
   transport: TransportKey; ownsBike: boolean;
+  branches: Branch[]; branchPermits: number;
   segmentSales: Record<SegmentKey, number>;
   customer: null | { name: string; order: string; value: number; budget: number; patience: number; segment: SegmentKey; fit: string; returning: boolean; source: string };
   message: string;
@@ -125,6 +127,7 @@ const TRANSPORT: Record<TransportKey,{name:string;fare:number;energy:number;note
   walk:{name:"Walk",fare:0,energy:6,note:"Free · healthiest · tiring"},ttc:{name:"TTC",fare:4,energy:2,note:"Balanced city travel"},
   bike:{name:"Bike",fare:0,energy:2,note:"Fast and free after purchase"},rideshare:{name:"Rideshare",fare:18,energy:0,note:"Expensive · preserves energy"}
 };
+const PROPERTY_COST: Record<CityKey,number>={junction:900,kensington:1250,financial:2200,harbour:1750,liberty:1650,yorkville:2800,mars:2100,cityhall:1900};
 
 const SEGMENTS: Record<SegmentKey, { icon: string; budget: number; patience: number }> = {
   Student: { icon: "◒", budget: 120, patience: 3 }, Professional: { icon: "◆", budget: 220, patience: 3 },
@@ -205,6 +208,7 @@ const initialState: GameState = {
   funding:"bootstrapped",debtBalance:0,equityGiven:0,milestone:"profit",
   founderLocation:"junction",homeLocation:"junction",transitPass:false,network:0,permitLevel:0,placesVisited:["junction"],housingTier:"room",
   personalCash:600,personalDebt:0,creditScore:650,health:85,job:"none",shiftsWorked:0,educationCredits:0,transport:"ttc",ownsBike:false,
+  branches:[],branchPermits:1,
   competitors: [{ name: "Neighbour & Co.", price: 1, reputation: 48, share: 31 }, { name: "Urban Spark", price: 1.1, reputation: 54, share: 34 }],
   segmentSales: { Student: 0, Professional: 0, Family: 0, Tourist: 0, "Small Business": 0, Corporate: 0 },
   customer: null, message: "Your neighbourhood is waiting.",
@@ -219,7 +223,7 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [sound, setSound] = useState(true);
   const [selected, setSelected] = useState<BusinessKey>("coffee");
-  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council" | "lab" | "lead" | "life">("trade");
+  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council" | "lab" | "lead" | "life" | "empire">("trade");
   const [hydrated, setHydrated] = useState(false);
   const [scenarioDraft, setScenarioDraft] = useState({ name: "My Founder Challenge", cash: 1000, days: 20, difficulty: "operator" as DifficultyKey, business: "coffee" as BusinessKey, district: "junction" as DistrictKey, seed: 4242 });
   const [shareStatus, setShareStatus] = useState("");
@@ -230,7 +234,8 @@ export default function Home() {
       const saved = localStorage.getItem("micro-empire-save");
       if (saved) try {
         const prior = JSON.parse(saved);
-        setGame({ ...initialState, ...prior, skills:{...initialState.skills,...(prior.skills||{})},mentorTrust:{...initialState.mentorTrust,...(prior.mentorTrust||{})},staff:(prior.staff||[]).map((m:StaffMember)=>({...m,tenure:m.tenure||0,loyalty:m.loyalty||70})),segmentSales: { ...initialState.segmentSales, ...(prior.segmentSales || {}) }, customer: null, phase: "home" });
+        const migratedBranches=prior.branches?.length?prior.branches:prior.business?[{id:1,name:`${DISTRICTS[prior.district as DistrictKey].name} Flagship`,city:prior.district,business:prior.business,level:1,inventory:prior.capacity||5,maxInventory:prior.maxCapacity||5,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[prior.district as CityKey]}]:[];
+        setGame({ ...initialState, ...prior, branches:migratedBranches,skills:{...initialState.skills,...(prior.skills||{})},mentorTrust:{...initialState.mentorTrust,...(prior.mentorTrust||{})},staff:(prior.staff||[]).map((m:StaffMember)=>({...m,tenure:m.tenure||0,loyalty:m.loyalty||70})),segmentSales: { ...initialState.segmentSales, ...(prior.segmentSales || {}) }, customer: null, phase: "home" });
       } catch { /* ignore invalid save */ }
       setHydrated(true);
     }, 0);
@@ -268,7 +273,7 @@ export default function Home() {
     const max = selected === "coffee" ? 10 : selected === "career" ? 7 : 5;
     setGame({ ...initialState, phase: "play", business: selected, cash: game.cash - b.cost, capacity: max, maxCapacity: max,
       expenses: b.cost, dailyExpenses: b.cost, message: `${b.name} is open. Serve your first customer!`,
-      district: game.district, founderLocation:game.district as CityKey,difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
+      district: game.district, founderLocation:game.district as CityKey,branches:[{id:1,name:`${DISTRICTS[game.district].name} Flagship`,city:game.district as CityKey,business:selected,level:1,inventory:max,maxInventory:max,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[game.district as CityKey]}],difficulty: game.difficulty, mode: game.mode, campaignDays: game.campaignDays, scenarioName: game.scenarioName, seed: game.seed,
       customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setWorldView("city");
@@ -389,10 +394,12 @@ export default function Home() {
     const payroll = g.staff.reduce((sum, member) => sum + member.salary, 0);
     const debtPayment=Math.min(g.debtBalance,Math.round(g.debtBalance*.035));
     const housing=g.housingTier==="studio"?55:25;
-    const cash = g.cash - rent - payroll-debtPayment;
+    let branchRevenue=0,branchCosts=0;
+    const branches=g.branches.map((branch,index)=>{if(index===0)return {...branch,propertyValue:Math.round(branch.propertyValue*1.001)};const units=Math.min(branch.inventory,1+branch.level+(branch.manager?1:0));const earned=Math.round(units*BUSINESSES[branch.business].unit*.62*(.75+g.pmf/200));const cost=Math.round(earned*.32+branch.propertyValue*.012);branchRevenue+=earned;branchCosts+=cost;return {...branch,inventory:branch.inventory-units,lifetimeRevenue:branch.lifetimeRevenue+earned,propertyValue:Math.round(branch.propertyValue*1.002)}});
+    const cash = g.cash - rent - payroll-debtPayment+branchRevenue-branchCosts;
     const personalCash=g.personalCash-housing-Math.round(g.personalDebt*.015);
-    const expenses = g.expenses + rent + payroll+debtPayment;
-    const dailyExpenses = g.dailyExpenses + rent + payroll+debtPayment;
+    const expenses = g.expenses + rent + payroll+debtPayment+branchCosts;
+    const dailyExpenses = g.dailyExpenses + rent + payroll+debtPayment+branchCosts;
     const finished = g.day >= g.campaignDays || cash < 0;
     const playerStrength = g.reputation / Math.max(.7, g.price);
     const rival = DIFFICULTIES[g.difficulty].rival;
@@ -400,8 +407,8 @@ export default function Home() {
       reputation: clamp(c.reputation + (Math.random() > .45 ? Math.round(2 * rival) : -1), 25, 95), share: clamp(Math.round(c.share + (c.reputation - g.reputation) / (18 / rival)), 12, 55) }));
     const playerShare = clamp(Math.round(100 - competitors.reduce((s,c) => s + c.share, 0) + playerStrength / 12), 10, 65);
     competitors[0].share = Math.round((100 - playerShare) * .48); competitors[1].share = 100 - playerShare - competitors[0].share;
-    return updateQuests({ ...g, cash,personalCash,creditScore:clamp(g.creditScore+(personalCash>=0?2:-12),300,850),health:clamp(g.health+(g.energy>45?2:-4),0,100),stress:clamp(g.stress+(personalCash<0?10:0),0,100),expenses, dailyExpenses, dailyPayroll: payroll, debtBalance:Math.max(0,g.debtBalance-debtPayment),competitors, customer: null, phase: finished ? "result" : "dayEnd",
-      message: cash < 0 ? "The business ran out of cash." : `Day ${g.day} complete. Business rent ${money(rent)} · Personal housing ${money(housing)} · Payroll ${money(payroll)}.` });
+    return updateQuests({ ...g,branches,cash,revenue:g.revenue+branchRevenue,dailyRevenue:g.dailyRevenue+branchRevenue,personalCash,creditScore:clamp(g.creditScore+(personalCash>=0?2:-12),300,850),health:clamp(g.health+(g.energy>45?2:-4),0,100),stress:clamp(g.stress+(personalCash<0?10:0),0,100),expenses, dailyExpenses, dailyPayroll: payroll, debtBalance:Math.max(0,g.debtBalance-debtPayment),competitors, customer: null, phase: finished ? "result" : "dayEnd",
+      message: cash < 0 ? "The business ran out of cash." : `Day ${g.day} complete. Branches produced ${money(branchRevenue-branchCosts)} net · Housing ${money(housing)} · Payroll ${money(payroll)}.` });
   }
 
   function beginNextDay(base?: GameState) {
@@ -521,6 +528,12 @@ export default function Home() {
   function repayPersonalDebt(){const payment=Math.min(200,game.personalDebt,game.personalCash);if(payment<=0)return;setGame(g=>({...g,personalCash:g.personalCash-payment,personalDebt:g.personalDebt-payment,creditScore:clamp(g.creditScore+8,300,850),message:`You repaid ${money(payment)} of personal debt. Credit resilience improved.`}));beep(720)}
   function buyBike(){if(game.ownsBike||game.personalCash<350)return;setGame(g=>({...g,personalCash:g.personalCash-350,ownsBike:true,transport:"bike",health:clamp(g.health+3,0,100),message:"You bought a city bike. Travel is now free and lightly restorative."}));beep(680)}
   function chooseTransport(key:TransportKey){if(key==="bike"&&!game.ownsBike)return;setGame(g=>({...g,transport:key,message:`${TRANSPORT[key].name} selected for city travel. ${TRANSPORT[key].note}.`}));}
+  function buyBranchPermit(){const cost=350+game.branchPermits*150;if(game.cash<cost)return;setGame(g=>({...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branchPermits:g.branchPermits+1,permitLevel:Math.min(3,g.permitLevel+1),message:`Expansion permit ${g.branchPermits+1} approved for ${money(cost)}.`}));beep(700)}
+  function openBranch(business:BusinessKey){const city=game.founderLocation;if(game.branches.some(b=>b.city===city)||game.branches.length>=game.branchPermits)return;const max=business==="coffee"?8:business==="career"?6:4;const cost=PROPERTY_COST[city]+BUSINESSES[business].cost;if(game.cash<cost)return;const branch:Branch={id:Date.now(),name:`${CITY[city].name} ${BUSINESSES[business].name}`,city,business,level:1,inventory:max,maxInventory:max,manager:null,lifetimeRevenue:0,propertyValue:PROPERTY_COST[city]};setGame(g=>({...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branches:[...g.branches,branch],reputation:clamp(g.reputation+5,0,100),message:`${branch.name} acquired for ${money(cost)}. It begins passive operations at daily close.`}));beep(880)}
+  function restockBranch(id:number){setGame(g=>{const branch=g.branches.find(b=>b.id===id);if(!branch)return g;const missing=branch.maxInventory-branch.inventory,cost=missing*(branch.business==="coffee"?12:branch.business==="career"?24:45);if(!missing||g.cash<cost)return g;return {...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branches:g.branches.map(b=>b.id===id?{...b,inventory:b.maxInventory}:b),message:`${branch.name} restocked for ${money(cost)}.`}});beep(520)}
+  function upgradeBranch(id:number){setGame(g=>{const branch=g.branches.find(b=>b.id===id);if(!branch)return g;const cost=500+branch.level*350;if(branch.level>=3||g.cash<cost)return g;return {...g,cash:g.cash-cost,expenses:g.expenses+cost,dailyExpenses:g.dailyExpenses+cost,branches:g.branches.map(b=>b.id===id?{...b,level:b.level+1,maxInventory:b.maxInventory+3,inventory:b.inventory+3,propertyValue:b.propertyValue+Math.round(cost*.7)}:b),message:`${branch.name} upgraded to level ${branch.level+1}.`}});beep(840)}
+  function assignManager(id:number){setGame(g=>{const used=new Set(g.branches.map(b=>b.manager).filter(Boolean));const available=g.staff.find(s=>!used.has(s.name));if(!available)return {...g,message:"Hire another specialist before assigning a branch manager."};return {...g,branches:g.branches.map(b=>b.id===id?{...b,manager:available.name}:b),message:`${available.name} now manages this branch, increasing daily throughput.`}});beep(760)}
+  function sellBranch(id:number){setGame(g=>{const branch=g.branches.find(b=>b.id===id);if(!branch||g.branches[0]?.id===id)return g;const value=Math.round(branch.propertyValue*.85);return {...g,cash:g.cash+value,branches:g.branches.filter(b=>b.id!==id),message:`${branch.name} sold for ${money(value)}.`}});beep(460)}
   function upgradeSkill(key:SkillKey){if(!game.skillPoints||game.skills[key]>=5)return;setGame(g=>({...g,skillPoints:g.skillPoints-1,skills:{...g.skills,[key]:g.skills[key]+1},message:`${SKILLS[key].name} advanced to level ${g.skills[key]+1}.`}));beep(850)}
   function meetMentor(key:keyof typeof MENTORS){if(game.cash<120)return;const m=MENTORS[key];advance(g=>({...g,cash:g.cash-120,expenses:g.expenses+120,dailyExpenses:g.dailyExpenses+120,focus:clamp(g.focus+16,0,100),stress:clamp(g.stress-8,0,100),mentorTrust:{...g.mentorTrust,[key]:clamp(g.mentorTrust[key]+10,0,100)},skills:{...g.skills,[m.skill]:Math.min(5,g.skills[m.skill]+1)},message:`${m.name} sharpened your ${SKILLS[m.skill].name.toLowerCase()}.`}));beep(700)}
   function chooseFunding(key:FundingKey){if(game.funding!=="bootstrapped"||key==="bootstrapped")return;setGame(g=>key==="debt"?{...g,funding:key,cash:g.cash+2200,debtBalance:2600,message:"A working-capital loan adds runway, with daily repayments."}:{...g,funding:key,cash:g.cash+3500,equityGiven:15,reputation:clamp(g.reputation+4,0,100),message:"An angel invested $3,500 for 15% of the company."});beep(760)}
@@ -576,8 +589,8 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">V4.1 · Life Economy Edition</div>
-            <p className="lede">Balance work, health, credit and personal runway while growing one Toronto venture into a micro empire.</p>
+            <div className="ribbon">V4.2 · Business Sandbox Edition</div>
+            <p className="lede">Acquire locations, manage branches and build a diversified Toronto business portfolio without losing your founder life.</p>
             <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "modes" }))}>Choose game mode <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
@@ -658,7 +671,7 @@ export default function Home() {
             <div className="pmf-card"><span><small>PRODUCT–MARKET FIT</small><b>{game.pmf}/100</b></span><i><u style={{width:`${game.pmf}%`}}/></i><em>{game.pmf >= 75 ? "Strong pull · protect retention" : game.pmf >= 50 ? "Promising · keep experimenting" : "Weak signal · interview customers"}</em></div>
             <div className="founder-vitals"><h3>Founder wellbeing</h3>{[["Health",game.health],["Energy",game.energy],["Focus",game.focus],["Stress",game.stress]].map(([label,value])=><span className={label==="Stress"?"stress":""} key={label}><small>{label}</small><i><u style={{width:`${value}%`}}/></i><b>{value}</b></span>)}</div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} · {DIFFICULTIES[game.difficulty].name}<small>{money(Math.round((DISTRICTS[game.district].rent + game.day * 10) * DIFFICULTIES[game.difficulty].rent))} rent due today</small></div>
-            <div className="city-status"><span><small>YOU ARE IN</small><b>{CITY[game.founderLocation].name}</b></span><span><small>PERSONAL CASH</small><b>{money(game.personalCash)}</b></span><span><small>CREDIT</small><b>{game.creditScore}</b></span><span><small>NETWORK</small><b>{game.network}/100</b></span><span><small>CITY ACCESS</small><b>{game.placesVisited.length}/8</b></span></div>
+            <div className="city-status"><span><small>YOU ARE IN</small><b>{CITY[game.founderLocation].name}</b></span><span><small>PERSONAL CASH</small><b>{money(game.personalCash)}</b></span><span><small>LOCATIONS</small><b>{game.branches.length}/{game.branchPermits}</b></span><span><small>NETWORK</small><b>{game.network}/100</b></span><span><small>CITY ACCESS</small><b>{game.placesVisited.length}/8</b></span></div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
               <Quest done={game.quests[0]} label="Serve 30 customers" progress={`${Math.min(game.served, 30)}/30`} />
@@ -682,7 +695,7 @@ export default function Home() {
           </div> : <div className="city-world"><div className="city-map-head"><span><small>LIVE TORONTO</small><b>{clock} · Day {game.day} · {TRANSPORT[game.transport].name}</b></span><div><button onClick={buyTransitPass} disabled={game.transitPass||game.personalCash<180}>{game.transitPass?"TTC Pass active":"Buy TTC Pass · $180"}</button><button onClick={()=>setWorldView("business")}>Open business view</button></div></div><div className={`toronto-map hour-${game.hour}`}><div className="lake-label">LAKE ONTARIO</div><div className="city-roads"/><div className="ttc-line"/><div className="cn-map">⌃<small>CN</small></div>{(Object.keys(CITY) as CityKey[]).map(key=><button key={key} style={{left:`${CITY[key].x}%`,top:`${CITY[key].y}%`}} className={`city-place ${game.founderLocation===key?"current":""} ${game.placesVisited.includes(key)?"visited":""}`} onClick={()=>travelTo(key)}><i>{CITY[key].icon}</i><span><b>{CITY[key].name}</b><small>{CITY[key].kind}</small></span>{game.founderLocation===key&&<em>YOU</em>}</button>)}<div className="founder-marker" style={{left:`${CITY[game.founderLocation].x}%`,top:`${CITY[game.founderLocation].y}%`}}>●</div></div><div className="place-drawer"><span><small>{CITY[game.founderLocation].kind.toUpperCase()}</small><b>{CITY[game.founderLocation].name}</b><em>{CITY[game.founderLocation].signal}</em></span><button onClick={cityAction}>{game.founderLocation===game.homeLocation?"Recover at home":game.founderLocation===(game.district as CityKey)?"Enter your business":game.founderLocation==="mars"?"Attend workshop · $80":game.founderLocation==="cityhall"?`Upgrade permit · $100`:game.founderLocation==="financial"?"Meet a banker":game.founderLocation==="yorkville"?"Meet investors":"Explore opportunity"}</button>{game.founderLocation===game.homeLocation&&<button onClick={upgradeHousing} disabled={game.housingTier==="studio"||game.personalCash<800}>{game.housingTier==="studio"?"Studio home active":"Upgrade to studio · $800"}</button>}</div><div className="toast city-toast">{game.message}</div></div>}
 
           <aside className="action-panel">
-            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council","lab","lead","life"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
+            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council","lab","lead","life","empire"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
             {opsTab === "trade" && <>
               <div className="strategy-box"><h4>Market strategy</h4>
                 <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
@@ -707,6 +720,7 @@ export default function Home() {
               <h4>Unit economics</h4><div className="metric-grid"><span><small>Conversion</small><b>{Math.round(conversion*100)}%</b></span><span><small>Retention</small><b>{Math.round(retention*100)}%</b></span><span><small>CAC</small><b>{money(cac)}</b></span><span><small>LTV</small><b>{money(ltv)}</b></span><span><small>Gross margin</small><b>{Math.round(grossMargin*100)}%</b></span><span><small>LTV/CAC</small><b>{cac ? (ltv/cac).toFixed(1) : "—"}×</b></span></div><p className="intel">Completed experiments: {game.experimentHistory.length}</p></div>}
             {opsTab === "lead" && <div className="ops-list leadership-lab"><h4>Leadership studio · {game.skillPoints} points</h4><button className="action recover" onClick={restFounder}><b>Protect recovery time</b><span>1 hour · restore energy, focus and composure</span></button><div className="skill-tree">{(Object.keys(SKILLS) as SkillKey[]).map(key=><article key={key}><i>{SKILLS[key].icon}</i><span><strong>{SKILLS[key].name}</strong><small>{SKILLS[key].note}</small></span><b>Lv {game.skills[key]}</b><button onClick={()=>upgradeSkill(key)} disabled={!game.skillPoints||game.skills[key]>=5}>+</button></article>)}</div><h4>Mentor network</h4>{(Object.keys(MENTORS) as (keyof typeof MENTORS)[]).map(key=>{const m=MENTORS[key];return <article className="mentor-card" key={key}><i>{m.icon}</i><span><strong>{m.name}</strong><small>{m.role} · Trust {game.mentorTrust[key]}%</small></span><button onClick={()=>meetMentor(key)} disabled={game.cash<120}>Meet {money(120)}</button></article>})}<h4>Capital strategy</h4><div className="funding-grid"><button className={game.funding==="bootstrapped"?"selected":""} disabled={game.funding!=="bootstrapped"}>Bootstrap<small>Keep 100% ownership</small></button><button onClick={()=>chooseFunding("debt")} disabled={game.funding!=="bootstrapped"}>Debt<small>+$2,200 · repay $2,600</small></button><button onClick={()=>chooseFunding("angel")} disabled={game.funding!=="bootstrapped"}>Angel<small>+$3,500 · give 15%</small></button></div>{game.funding!=="bootstrapped"&&<p className="intel">Capital: {game.funding} · Debt {money(game.debtBalance)} · Equity given {game.equityGiven}%</p>}<h4>North-star milestone</h4><select value={game.milestone} onChange={e=>setGame(g=>({...g,milestone:e.target.value as GameState["milestone"]}))}><option value="profit">Profitable engine</option><option value="brand">Beloved brand</option><option value="people">High-trust team</option></select></div>}
             {opsTab === "life" && <div className="ops-list life-economy"><h4>Life economy</h4><div className="life-balance"><span><small>Personal cash</small><b>{money(game.personalCash)}</b></span><span><small>Personal debt</small><b>{money(game.personalDebt)}</b></span><span><small>Credit score</small><b>{game.creditScore}</b></span><span><small>Health</small><b>{game.health}/100</b></span></div><h4>Employment</h4><select value={game.job} onChange={e=>chooseJob(e.target.value as JobKey)}>{(Object.keys(JOBS) as JobKey[]).map(key=><option key={key} value={key} disabled={game.educationCredits<JOBS[key].requirement}>{JOBS[key].name} · {money(JOBS[key].pay)}/shift</option>)}</select><p className="intel">{JOBS[game.job].note} · {game.shiftsWorked} shifts worked</p><button className="action" onClick={workShift} disabled={game.job==="none"||game.energy<JOBS[game.job].energy}><b>Work one shift</b><span>Earn {money(JOBS[game.job].pay)} · energy −{JOBS[game.job].energy}</span></button><h4>Education</h4><button className="action" onClick={study} disabled={game.personalCash<150}><b>Complete founder course</b><span>{money(150)} personal · +1 credit · +1 skill point</span></button><p className="intel">Education credits: {game.educationCredits}</p><h4>Transportation</h4><div className="transport-grid">{(Object.keys(TRANSPORT) as TransportKey[]).map(key=><button key={key} className={game.transport===key?"selected":""} disabled={key==="bike"&&!game.ownsBike} onClick={()=>chooseTransport(key)}><b>{TRANSPORT[key].name}</b><small>{TRANSPORT[key].note}</small></button>)}</div>{!game.ownsBike&&<button onClick={buyBike} disabled={game.personalCash<350}>Buy city bike · {money(350)}</button>}<h4>Personal credit</h4><div className="credit-actions"><button onClick={usePersonalCredit} disabled={game.creditScore<600||game.personalDebt>0}>Borrow $500</button><button onClick={repayPersonalDebt} disabled={!game.personalDebt||!game.personalCash}>Repay up to $200</button></div><p className="intel">Housing: {game.housingTier} · {money(game.housingTier==="studio"?55:25)}/day</p></div>}
+            {opsTab === "empire" && <div className="ops-list empire-portfolio"><h4>City portfolio</h4><div className="portfolio-total"><span><small>Locations</small><b>{game.branches.length}</b></span><span><small>Property value</small><b>{money(game.branches.reduce((s,b)=>s+b.propertyValue,0))}</b></span><span><small>Branch revenue</small><b>{money(game.branches.reduce((s,b)=>s+b.lifetimeRevenue,0))}</b></span></div>{game.branches.map((branch,index)=><article className="branch-card" key={branch.id}><div><i>{BUSINESSES[branch.business].icon}</i><span><strong>{branch.name}</strong><small>{index===0?"FLAGSHIP":"PASSIVE BRANCH"} · Level {branch.level}</small></span></div><p>Inventory {branch.inventory}/{branch.maxInventory} · Manager {branch.manager||"Unassigned"}</p><small>Property {money(branch.propertyValue)} · Lifetime revenue {money(branch.lifetimeRevenue)}</small><div className="branch-actions"><button onClick={()=>restockBranch(branch.id)} disabled={branch.inventory===branch.maxInventory}>Restock</button><button onClick={()=>upgradeBranch(branch.id)} disabled={branch.level>=3}>Upgrade</button>{index>0&&<button onClick={()=>assignManager(branch.id)} disabled={Boolean(branch.manager)}>Manager</button>}{index>0&&<button onClick={()=>sellBranch(branch.id)}>Sell</button>}</div></article>)}<h4>Expand from {CITY[game.founderLocation].name}</h4>{game.branches.some(b=>b.city===game.founderLocation)?<p className="intel">You already operate in this neighbourhood. Travel somewhere new to expand.</p>:game.branches.length>=game.branchPermits?<button className="action" onClick={buyBranchPermit}><b>Purchase expansion permit</b><span>{money(350+game.branchPermits*150)} · unlock location {game.branchPermits+1}</span></button>:<div className="new-branch-grid">{(Object.keys(BUSINESSES) as BusinessKey[]).map(key=><button key={key} onClick={()=>openBranch(key)} disabled={game.cash<PROPERTY_COST[game.founderLocation]+BUSINESSES[key].cost}><i>{BUSINESSES[key].icon}</i><b>{BUSINESSES[key].name}</b><small>{money(PROPERTY_COST[game.founderLocation]+BUSINESSES[key].cost)}</small></button>)}</div>}</div>}
           </aside>
         </section>
       )}
@@ -736,7 +750,7 @@ export default function Home() {
           <div className="score">{score.toLocaleString()}<small>Founder score</small></div>
           <div className="report-numbers"><span><small>Ending cash</small><b>{money(game.cash)}</b></span><span><small>Reputation</small><b>{game.reputation}</b></span><span><small>Served</small><b>{game.served}</b></span><span><small>Quests</small><b>{game.quests.filter(Boolean).length}/3</b></span></div>
           <div className="achievement-grid">{Object.entries(ACHIEVEMENTS).map(([id,a]) => <div key={id} className={game.achievements.includes(id) ? "unlocked" : "locked"}><i>{a.icon}</i><b>{a.name}</b><small>{a.note}</small></div>)}</div>
-          <div className="final-validation"><span><small>Product–market fit</small><b>{game.pmf}/100</b></span><span><small>Personal wealth</small><b>{money(game.personalCash-game.personalDebt)}</b></span><span><small>Health / Credit</small><b>{game.health} / {game.creditScore}</b></span><span><small>Ownership retained</small><b>{100-game.equityGiven}%</b></span></div>
+          <div className="final-validation"><span><small>Business locations</small><b>{game.branches.length}</b></span><span><small>Property portfolio</small><b>{money(game.branches.reduce((s,b)=>s+b.propertyValue,0))}</b></span><span><small>Personal wealth</small><b>{money(game.personalCash-game.personalDebt)}</b></span><span><small>Ownership retained</small><b>{100-game.equityGiven}%</b></span></div>
           <button className="score-share" onClick={shareScore}>Share scorecard</button>{shareStatus&&<p className="share-status">{shareStatus}</p>}
           <button className="primary" onClick={reset}>Build another empire <span>↻</span></button>
         </div></section>

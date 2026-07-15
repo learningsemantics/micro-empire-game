@@ -2,6 +2,15 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V4.2 Business Sandbox Edition
+
+- Acquire multiple Toronto properties and business locations
+- Diversify branches across Coffee Cart, Career Studio and AI Agency models
+- Purchase expansion permits and grow a citywide portfolio
+- Manage branch inventory, upgrades, property values and lifetime revenue
+- Assign persistent employees as branch managers
+- Simulate passive demand, operating costs and daily branch profit
+
 ## V4.1 Life Economy Edition
 
 - Separate personal and business finances
