@@ -24,6 +24,8 @@ type WeatherKey = "clear" | "rain" | "snow" | "heat";
 type EconomyKey = "growth" | "steady" | "slowdown";
 type PolicyKey = "none" | "smallbiz" | "rentcontrol" | "green";
 type RivalFounder = { id:string; name:string; company:string; business:BusinessKey; city:CityKey; strategy:string; cash:number; reputation:number; locations:number; score:number; relationship:number; momentum:number };
+type ConsoleGroup = "city" | "business" | "people" | "founder" | "league";
+type OpsTab = "trade" | "team" | "supply" | "market" | "council" | "lab" | "lead" | "life" | "empire" | "people" | "pulse" | "league";
 type Phase = "home" | "modes" | "scenario" | "select" | "district" | "play" | "dayEnd" | "decision" | "negotiation" | "result";
 
 type GameState = {
@@ -158,6 +160,7 @@ const makeRivals=():RivalFounder[]=>[
   {id:"dev",name:"Dev Shah",company:"Harbour Works",business:"agency",city:"harbour",strategy:"Aggressive expansion",cash:1600,reputation:50,locations:2,score:2600,relationship:0,momentum:5},
   {id:"claire",name:"Claire Wong",company:"Liberty Collective",business:"career",city:"liberty",strategy:"Relationship network",cash:1450,reputation:66,locations:1,score:2800,relationship:0,momentum:3}
 ];
+const CONSOLE_GROUPS:Record<ConsoleGroup,{icon:string;label:string;tabs:OpsTab[]}>={city:{icon:"⌖",label:"City",tabs:["pulse","market","supply"]},business:{icon:"▦",label:"Business",tabs:["trade","team","lab","empire"]},people:{icon:"●",label:"People",tabs:["people","council"]},founder:{icon:"◆",label:"Founder",tabs:["life","lead"]},league:{icon:"▲",label:"League",tabs:["league"]}};
 
 const SEGMENTS: Record<SegmentKey, { icon: string; budget: number; patience: number }> = {
   Student: { icon: "◒", budget: 120, patience: 3 }, Professional: { icon: "◆", budget: 220, patience: 3 },
@@ -256,11 +259,14 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [sound, setSound] = useState(true);
   const [selected, setSelected] = useState<BusinessKey>("coffee");
-  const [opsTab, setOpsTab] = useState<"trade" | "team" | "supply" | "market" | "council" | "lab" | "lead" | "life" | "empire" | "people" | "pulse" | "league">("trade");
+  const [opsTab, setOpsTab] = useState<OpsTab>("trade");
+  const [consoleGroup,setConsoleGroup]=useState<ConsoleGroup>("business");
   const [hydrated, setHydrated] = useState(false);
   const [scenarioDraft, setScenarioDraft] = useState({ name: "My Founder Challenge", cash: 1000, days: 20, difficulty: "operator" as DifficultyKey, business: "coffee" as BusinessKey, district: "junction" as DistrictKey, seed: 4242 });
   const [shareStatus, setShareStatus] = useState("");
   const [worldView,setWorldView]=useState<"city"|"business">("city");
+  const [showBriefing,setShowBriefing]=useState(false);
+  const [celebration,setCelebration]=useState("");
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -292,6 +298,8 @@ export default function Home() {
   const grossMargin = game.revenue ? (game.revenue - game.totalCogs) / game.revenue : 0;
   const weekKey=Math.floor(Date.now()/604800000);const weeklyTheme=["Community Builder","Cash Discipline","Customer Loyalty","Green Toronto"][weekKey%4];
   function calculateFounderScore(g:GameState){const share=clamp(100-g.competitors.reduce((sum,c)=>sum+c.share,0),10,65);return Math.round(g.cash*.35+g.reputation*35+g.served*28+share*20+g.storyLog.length*180+g.branches.length*300+g.socialCapital*12+g.leaguePoints*25)}
+  function founderCoach(){if(game.energy<25)return "Your energy is critical. Go home or protect recovery time before making another major decision.";if(game.personalCash<100)return "Personal runway is nearly gone. Work a shift or use credit before housing costs land.";if(game.capacity<=2)return "Your flagship is nearly out of capacity. Restock before demand arrives.";if(game.pmf<50)return "Demand remains uncertain. Interview customers or run an experiment before expanding.";if(game.staff.length<1&&game.served>=5)return "You are becoming the bottleneck. Your first hire can create capacity and resilience.";if(game.branches.length>=game.branchPermits)return "Your portfolio has reached its permit ceiling. Plan the next expansion permit.";return "The fundamentals are stable. Use today to deepen a relationship, improve evidence or build strategic capacity."}
+  function residentDialogue(id:string){const r=game.residents.find(person=>person.id===id);if(!r)return "Let’s see what this business can do.";if(r.relationship>=60)return `I’ve watched you build this from the beginning. I’m rooting for you.`;if(r.relationship>=30)return `Good to see you again. People are starting to talk about this place.`;if(r.relationship<0)return `I remember what happened last time. Show me this will be different.`;return r.personality==="Curious early adopter"?"I’m always willing to try a thoughtful new idea.":`I’m looking for something that respects my time and budget.`}
 
   function beep(tone = 520) {
     if (!sound) return;
@@ -302,6 +310,7 @@ export default function Home() {
       osc.connect(gain); gain.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + .12);
     } catch { /* audio is an enhancement */ }
   }
+  function openConsole(group:ConsoleGroup){setConsoleGroup(group);setOpsTab(CONSOLE_GROUPS[group].tabs[0]);if(group==="city")setWorldView("city")}
 
   function startBusiness() {
     const b = BUSINESSES[selected];
@@ -312,6 +321,7 @@ export default function Home() {
       customer: makeCustomer(selected, b.unit, 50, game.district, 1, 1, game.difficulty, 35, 0,initialState.residents,1), event: `Opening Day in ${DISTRICTS[game.district].name}: neighbours are curious.` });
     beep(680);
     setWorldView("city");
+    setConsoleGroup("business");setOpsTab("trade");
     setShowHelp(true);
   }
 
@@ -360,6 +370,7 @@ export default function Home() {
     if (100 - g.competitors.reduce((sum,c) => sum + c.share, 0) >= 50) unlocked.add("leader");
     if (g.cash >= 10000) unlocked.add("cash");
     if (g.storyLog.length >= 5) unlocked.add("judgment");
+    if(unlocked.size>g.achievements.length){const newest=[...unlocked].find(id=>!g.achievements.includes(id));if(newest)window.setTimeout(()=>{setCelebration(`${ACHIEVEMENTS[newest as keyof typeof ACHIEVEMENTS].icon} ${ACHIEVEMENTS[newest as keyof typeof ACHIEVEMENTS].name} unlocked`);window.setTimeout(()=>setCelebration(""),2600)},0)}
     return { ...g, quests: [g.served >= 30, g.reputation >= 75, g.revenue >= 12000], achievements: [...unlocked] };
   }
 
@@ -463,6 +474,7 @@ export default function Home() {
       const nextDayNumber = g.day + 1;
       const nextStage = Math.min(3, Math.floor(((nextDayNumber - 1) / g.campaignDays) * 4));
       const stageUp = nextStage > g.stageRewarded;
+      if(stageUp)window.setTimeout(()=>{setCelebration(`${STAGES[nextStage].icon} ${STAGES[nextStage].name} reached`);window.setTimeout(()=>setCelebration(""),3000)},0);
       const grant=750+g.skills.strategy*150;
       const weather=(['clear','rain','clear','snow','clear','heat'] as WeatherKey[])[(nextDayNumber+g.seed)%6];const economy:EconomyKey=nextDayNumber%11>=8?"slowdown":nextDayNumber%7<=2?"growth":"steady";const interestRate=economy==="growth"?5.75:economy==="slowdown"?4.25:5.25;const ttcStatus=nextDayNumber%7===0?"Line closure":nextDayNumber%4===0?"Major delays":"Good service";const policy:PolicyKey=nextDayNumber%12>=9?"green":nextDayNumber%12>=6?"rentcontrol":nextDayNumber%12>=3?"smallbiz":"none";const cityEvents=["Kensington Night Market","Toronto Tech Week at MaRS","Harbourfront Tourism Surge","Liberty Village Construction","Financial District Conference","Junction Street Festival"];const cityEvent=cityEvents[nextDayNumber%cityEvents.length];const neighbourhoodHeat=Object.fromEntries((Object.keys(g.neighbourhoodHeat) as CityKey[]).map((key,i)=>[key,clamp(g.neighbourhoodHeat[key]+((nextDayNumber+i)%3-1)*3+(economy==="growth"?2:economy==="slowdown"?-2:0),25,95)])) as Record<CityKey,number>;
       const playerScore=calculateFounderScore(g);const rivals=g.rivals.map((r,i)=>{const expansion=(nextDayNumber+i)%(11-r.momentum)===0?1:0;const allianceBoost=r.relationship>=35?1.08:1;const earned=Math.round((180+r.momentum*45+r.locations*70)*ECONOMY[economy].factor*allianceBoost);const reputation=clamp(r.reputation+((nextDayNumber+i)%3-1)+(r.strategy.includes("Relationship")?1:0),30,95);const locations=Math.min(5,r.locations+expansion);return {...r,cash:r.cash+earned-locations*45,reputation,locations,score:Math.round(r.score+earned*.45+reputation*5+locations*90)}});const leagueGain=rivals.filter(r=>playerScore>r.score).length;
@@ -475,6 +487,7 @@ export default function Home() {
       if (next.business) next.customer = makeCustomer(next.business, BUSINESSES[next.business].unit, next.reputation, next.district, next.price, next.offer, next.difficulty, next.pmf, next.referrals,next.residents,cityDemand(next));
       return next;
     });
+    setShowBriefing(true);
     beep(650);
   }
 
@@ -500,7 +513,7 @@ export default function Home() {
     });
   }
 
-  function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); setWorldView("city"); beep(400); }
+  function reset() { localStorage.removeItem("micro-empire-save"); setGame(initialState); setSelected("coffee"); setWorldView("city");setConsoleGroup("business");setOpsTab("trade"); beep(400); }
 
   function prepareDailyChallenge() {
     const dateKey = Number(new Date().toISOString().slice(0,10).replaceAll("-",""));
@@ -616,7 +629,7 @@ export default function Home() {
   if (!hydrated) return <main className="loading">Opening your neighbourhood…</main>;
 
   return (
-    <main className={`game-shell phase-${game.phase}`}>
+    <main className={`game-shell phase-${game.phase} weather-${game.weather} economy-${game.economy}`}>
       <div className="sky"><span className="cloud c1"/><span className="cloud c2"/><span className="sun"/></div>
       <header className="topbar">
         <button className="brand" onClick={() => setGame(g => ({ ...g, phase: "home" }))} aria-label="Micro Empire home">
@@ -637,8 +650,8 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow">A Toronto founder story</p>
             <h1>MICRO<br/><span>EMPIRE</span></h1>
-            <div className="ribbon">V5.0 · Toronto Founder League</div>
-            <p className="lede">Compete, collaborate and share one living Toronto economy with a league of ambitious rival founders.</p>
+            <div className="ribbon">V5.1 · Experience Edition</div>
+            <p className="lede">Live your Toronto founder story through a clearer journey, memorable people and a city that feels alive.</p>
             <button className="primary huge" onClick={() => setGame(g => ({ ...g, phase: "modes" }))}>Choose game mode <span>→</span></button>
             {game.business && <button className="text-button" onClick={() => setGame(g => ({ ...g, phase: "play" }))}>Continue saved game · Day {game.day}</button>}
           </div>
@@ -720,6 +733,7 @@ export default function Home() {
             <div className="founder-vitals"><h3>Founder wellbeing</h3>{[["Health",game.health],["Energy",game.energy],["Focus",game.focus],["Stress",game.stress]].map(([label,value])=><span className={label==="Stress"?"stress":""} key={label}><small>{label}</small><i><u style={{width:`${value}%`}}/></i><b>{value}</b></span>)}</div>
             <div className="location-chip">{DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} · {DIFFICULTIES[game.difficulty].name}<small>{money(Math.round((DISTRICTS[game.district].rent + game.day * 10) * DIFFICULTIES[game.difficulty].rent))} rent due today</small></div>
             <div className="city-status"><span><small>YOU ARE IN</small><b>{CITY[game.founderLocation].name}</b></span><span><small>WEATHER</small><b>{WEATHER[game.weather].icon} {WEATHER[game.weather].name}</b></span><span><small>ECONOMY</small><b>{ECONOMY[game.economy].name}</b></span><span><small>SOCIAL CAPITAL</small><b>{game.socialCapital}/100</b></span><span><small>PEOPLE HERE</small><b>{game.residents.filter(r=>r.location===game.founderLocation).length}</b></span></div>
+            <div className="founder-journey"><h3>Your founder journey</h3>{[[game.placesVisited.length>=3,"Explore Toronto",`${game.placesVisited.length}/3`],[game.served>=5,"Prove demand",`${game.served}/5`],[game.staff.length>=1,"Build a team",`${game.staff.length}/1`],[game.residents.some(r=>r.relationship>=20),"Earn trust",`${Math.max(0,...game.residents.map(r=>r.relationship))}/20`],[game.branches.length>=2,"Expand the empire",`${game.branches.length}/2`]].map(([done,label,progress],i)=><div className={done?"done":""} key={String(label)}><i>{done?"✓":i+1}</i><span>{label}<small>{progress}</small></span></div>)}</div>
             <p className="event-banner">{game.event || "A fresh day in the neighbourhood"}</p>
             <div className="quests"><h3>Founder goals</h3>
               <Quest done={game.quests[0]} label="Serve 30 customers" progress={`${Math.min(game.served, 30)}/30`} />
@@ -738,13 +752,14 @@ export default function Home() {
             {game.customer ? <div className="customer-card">
               <div className="avatar">{game.customer.name[0]}</div><div><small>{game.customer.source.toUpperCase()} · {SEGMENTS[game.customer.segment].icon} {game.customer.segment.toUpperCase()}</small><strong>{game.customer.name}</strong><span>{game.customer.order} · Price {money(game.customer.value)} · {game.insights >= 3 ? `Budget ${money(game.customer.budget)}` : "Budget signal locked—interview customers"}</span>
               <small>{game.residents.find(r=>r.id===game.customer?.residentId)?.role} · Relationship {game.residents.find(r=>r.id===game.customer?.residentId)?.relationship||0}</small>
+              <em className="customer-dialogue">“{residentDialogue(game.customer.residentId)}”</em>
               <div className="patience"><i style={{ width: `${game.customer.patience / 3 * 100}%` }}/></div></div>
             </div> : <div className="customer-card quiet">Waiting for the next customer…</div>}
             <div className="toast" aria-live="polite">{game.message}</div>
           </div> : <div className="city-world"><div className="city-map-head"><span><small>LIVE TORONTO</small><b>{clock} · Day {game.day} · {TRANSPORT[game.transport].name}</b></span><div><button onClick={buyTransitPass} disabled={game.transitPass||game.personalCash<180}>{game.transitPass?"TTC Pass active":"Buy TTC Pass · $180"}</button><button onClick={()=>setWorldView("business")}>Open business view</button></div></div><div className={`toronto-map hour-${game.hour}`}><div className="lake-label">LAKE ONTARIO</div><div className="city-roads"/><div className="ttc-line"/><div className="cn-map">⌃<small>CN</small></div>{(Object.keys(CITY) as CityKey[]).map(key=><button key={key} style={{left:`${CITY[key].x}%`,top:`${CITY[key].y}%`}} className={`city-place ${game.founderLocation===key?"current":""} ${game.placesVisited.includes(key)?"visited":""}`} onClick={()=>travelTo(key)}><i>{CITY[key].icon}</i><span><b>{CITY[key].name}</b><small>{CITY[key].kind}</small></span>{game.founderLocation===key&&<em>YOU</em>}</button>)}<div className="founder-marker" style={{left:`${CITY[game.founderLocation].x}%`,top:`${CITY[game.founderLocation].y}%`}}>●</div></div><div className="place-drawer"><span><small>{CITY[game.founderLocation].kind.toUpperCase()}</small><b>{CITY[game.founderLocation].name}</b><em>{CITY[game.founderLocation].signal}</em></span><button onClick={cityAction}>{game.founderLocation===game.homeLocation?"Recover at home":game.founderLocation===(game.district as CityKey)?"Enter your business":game.founderLocation==="mars"?"Attend workshop · $80":game.founderLocation==="cityhall"?`Upgrade permit · $100`:game.founderLocation==="financial"?"Meet a banker":game.founderLocation==="yorkville"?"Meet investors":"Explore opportunity"}</button>{game.founderLocation===game.homeLocation&&<button onClick={upgradeHousing} disabled={game.housingTier==="studio"||game.personalCash<800}>{game.housingTier==="studio"?"Studio home active":"Upgrade to studio · $800"}</button>}</div><div className="toast city-toast">{game.message}</div></div>}
 
           <aside className="action-panel">
-            <h3>Founder console</h3><div className="ops-tabs">{(["trade","team","supply","market","council","lab","lead","life","empire","people","pulse","league"] as const).map(tab => <button key={tab} className={opsTab === tab ? "active" : ""} onClick={() => setOpsTab(tab)}>{tab}</button>)}</div>
+            <h3>Founder console</h3><div className="founder-coach"><i>✦</i><span><small>FOUNDER COACH</small>{founderCoach()}</span></div><div className="console-primary">{(Object.keys(CONSOLE_GROUPS) as ConsoleGroup[]).map(group=><button key={group} className={consoleGroup===group?"active":""} onClick={()=>openConsole(group)}><i>{CONSOLE_GROUPS[group].icon}</i><span>{CONSOLE_GROUPS[group].label}</span></button>)}</div><div className="ops-tabs contextual">{CONSOLE_GROUPS[consoleGroup].tabs.map(tab=><button key={tab} className={opsTab===tab?"active":""} onClick={()=>setOpsTab(tab)}>{tab}</button>)}</div>
             {opsTab === "trade" && <>
               <div className="strategy-box"><h4>Market strategy</h4>
                 <div className="price-control"><button onClick={() => adjustPrice(-.1)} aria-label="Lower price">−</button><span><small>PRICE INDEX</small><b>{Math.round(game.price * 100)}%</b></span><button onClick={() => adjustPrice(.1)} aria-label="Raise price">+</button></div>
@@ -808,9 +823,12 @@ export default function Home() {
         </div></section>
       )}
 
+      {showBriefing&&game.phase==="play"&&<div className="briefing-backdrop"><section className="morning-briefing"><p className="eyebrow">Toronto morning briefing · Day {game.day}</p><div className="briefing-weather">{WEATHER[game.weather].icon}</div><h2>{game.cityEvent}</h2><p>{WEATHER[game.weather].note}. {ECONOMY[game.economy].note}.</p><div className="briefing-grid"><span><small>WEATHER</small><b>{WEATHER[game.weather].name}</b></span><span><small>TTC</small><b>{game.ttcStatus}</b></span><span><small>ECONOMY</small><b>{ECONOMY[game.economy].name}</b></span><span><small>POLICY</small><b>{POLICIES[game.cityPolicy].name}</b></span></div><div className="briefing-priority"><i>✦</i><span><small>YOUR PRIORITY</small><b>{founderCoach()}</b></span></div><div className="briefing-actions"><button onClick={()=>setShowBriefing(false)}>Begin the day</button><button onClick={()=>{setShowBriefing(false);openConsole("city");setWorldView("city")}}>Open Toronto map</button></div></section></div>}
+      {celebration&&<div className="celebration" role="status"><i>✦</i><b>{celebration}</b><span>Keep building your Toronto story.</span></div>}
+
       {showHelp && <div className="help-backdrop" role="dialog" aria-modal="true" aria-label="How to play"><div className="help-card">
-        <button className="close" onClick={() => setShowHelp(false)}>×</button><p className="eyebrow">Founder field guide</p><h2>Build wisely. Move quickly.</h2>
-        <ol><li><b>Lead yourself first</b><span>Every operating action consumes energy. Protect recovery before stress damages focus.</span></li><li><b>Build founder capability</b><span>Spend skill points and meet mentors to improve judgment throughout the campaign.</span></li><li><b>Choose capital carefully</b><span>Bootstrap, borrow or sell equity—each path changes the company you finish with.</span></li><li><b>Negotiate the trade-off</b><span>Five live deals test whether you hold a firm line or invest in the relationship.</span></li></ol>
+        <button className="close" onClick={() => setShowHelp(false)}>×</button><p className="eyebrow">Founder field guide</p><h2>Build your Toronto story.</h2>
+        <ol><li><b>Follow the journey</b><span>Start by exploring three places, serving five customers and earning the trust of one resident.</span></li><li><b>Use five clear areas</b><span>City, Business, People, Founder and League organize every decision without hiding the simulation depth.</span></li><li><b>Read each morning</b><span>The daily briefing explains weather, transit, policy, the economy and your most urgent priority.</span></li><li><b>Remember the human story</b><span>Residents, employees and rivals remember how you treat them. Relationships can become your strongest advantage.</span></li></ol>
         <button className="primary" onClick={() => setShowHelp(false)}>Let’s build</button>
       </div></div>}
     </main>
