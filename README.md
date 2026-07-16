@@ -2,6 +2,18 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V6.0 Complete Free Edition
+
+- Five founder legacy endings derived from ethics, community, expansion, leadership and resilience
+- Complete campaign epilogue with prosperity, trust, people, resilience and ethics pillars
+- Local Hall of Fame ranking the player’s strongest completed runs
+- Complete Free Edition credits and feature overview
+- Explicit local-only privacy disclosure with no accounts, advertising or analytics
+- Direct structured player-feedback path through the public GitHub repository
+- Complete replay loop from onboarding through campaign, legacy and new run
+- Final V6.0 branding across the home, finale and offline cache
+- Automated tests for legacy selection and outcome-pillar boundaries
+
 ## V5.9 Launch Candidate
 
 - Four-step first-run onboarding focused on operating rhythm and founder judgment

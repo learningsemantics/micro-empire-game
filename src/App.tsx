@@ -45,6 +45,7 @@ import {
   type FounderProfile,
 } from "./game/progression";
 import { dayPhase, safeVolume, soundscapeFor } from "./game/atmosphere";
+import { founderLegacy, legacyPillars } from "./game/finale";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -178,6 +179,7 @@ type Phase =
   | "decision"
   | "negotiation"
   | "crisis"
+  | "epilogue"
   | "result";
 
 type GameState = {
@@ -1369,6 +1371,7 @@ function money(n: number) {
 export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
+  const [showCredits, setShowCredits] = useState(false);
   const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1636,6 +1639,18 @@ export default function Home() {
     game.completedObjectives,
     game.claimedMissionIds.length,
   );
+  const legacyInput = {
+    cash: game.cash,
+    reputation: game.reputation,
+    socialCapital: game.socialCapital,
+    ethics: game.ethicsScore,
+    branches: game.branches.length,
+    staff: game.staff.length,
+    health: game.health,
+    crises: game.crisisHistory.length,
+  };
+  const legacy = founderLegacy(legacyInput);
+  const legacyScores = legacyPillars(legacyInput);
   const todayObjective = dailyObjective(game.seed, game.day);
   const objectiveNow: ObjectiveSnapshot = {
     served: game.served,
@@ -4294,10 +4309,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.9 · Launch Candidate</div>
+            <div className="ribbon">V6.0 · Complete Free Edition</div>
             <p className="lede">
-              A refined, reliable founder simulation with guided onboarding,
-              resilient saves and deterministic Toronto challenges.
+              The complete Toronto founder journey—from first customer to the
+              legacy your choices leave behind.
             </p>
             <button
               className="primary huge"
@@ -4324,6 +4339,12 @@ export default function Home() {
                 </em>
               </span>
             </div>
+            <button
+              className="edition-note"
+              onClick={() => setShowCredits(true)}
+            >
+              Complete Free Edition · What’s included?
+            </button>
           </div>
           <Neighbourhood active={game.business || "coffee"} people={6} />
         </section>
@@ -6523,9 +6544,87 @@ export default function Home() {
               Share scorecard
             </button>
             {shareStatus && <p className="share-status">{shareStatus}</p>}
-            <button className="primary" onClick={reset}>
-              Build another empire <span>↻</span>
+            <button
+              className="primary"
+              onClick={() => setGame((g) => ({ ...g, phase: "epilogue" }))}
+            >
+              Reveal founder legacy <span>→</span>
             </button>
+            <button className="score-share replay-now" onClick={reset}>
+              Build another empire ↻
+            </button>
+          </div>
+        </section>
+      )}
+
+      {game.phase === "epilogue" && (
+        <section className="epilogue-screen screen">
+          <div className="legacy-card">
+            <p className="eyebrow">Micro Empire · Founder legacy</p>
+            <div className="legacy-icon">{legacy.icon}</div>
+            <h2>{legacy.title}</h2>
+            <h3>{legacy.tagline}</h3>
+            <p className="legacy-copy">{legacy.epilogue}</p>
+            <div className="legacy-pillars">
+              {Object.entries(legacyScores).map(([name, value]) => (
+                <span key={name}>
+                  <small>{name}</small>
+                  <b>{value}</b>
+                  <i>
+                    <u style={{ width: `${value}%` }} />
+                  </i>
+                </span>
+              ))}
+            </div>
+            <div className="legacy-summary">
+              <span>
+                <small>Final grade</small>
+                <b>{grade}</b>
+              </span>
+              <span>
+                <small>Founder level</small>
+                <b>{currentFounderLevel.level}</b>
+              </span>
+              <span>
+                <small>Campaign missions</small>
+                <b>{game.claimedMissionIds.length}/8</b>
+              </span>
+              <span>
+                <small>Ethics</small>
+                <b>{game.ethicsScore}</b>
+              </span>
+            </div>
+            {runHistory.length > 0 && (
+              <div className="hall-of-fame">
+                <h3>Local Hall of Fame</h3>
+                {[...runHistory]
+                  .sort((a, b) => b.score - a.score)
+                  .slice(0, 5)
+                  .map((run, index) => (
+                    <span key={run.id}>
+                      <b>#{index + 1}</b>
+                      <em>{run.scenario}</em>
+                      <small>{run.grade}</small>
+                      <strong>{run.score.toLocaleString()}</strong>
+                    </span>
+                  ))}
+              </div>
+            )}
+            <div className="legacy-actions">
+              <button className="primary" onClick={reset}>
+                Begin a new legacy <span>↻</span>
+              </button>
+              <button onClick={() => setShowCredits(true)}>
+                Credits &amp; Free Edition
+              </button>
+              <a
+                href="https://github.com/learningsemantics/micro-empire-game/issues/new?title=V6.0%20Player%20Feedback&body=What%20I%20enjoyed%3A%0A%0AWhat%20was%20confusing%3A%0A%0AMy%20suggestion%3A"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Share player feedback
+              </a>
+            </div>
           </div>
         </section>
       )}
@@ -6877,6 +6976,87 @@ export default function Home() {
             <button className="onboarding-skip" onClick={completeOnboarding}>
               Skip tour
             </button>
+          </div>
+        </div>
+      )}
+
+      {showCredits && (
+        <div
+          className="help-backdrop credits-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Micro Empire credits"
+        >
+          <div className="help-card credits-card">
+            <button className="close" onClick={() => setShowCredits(false)}>
+              ×
+            </button>
+            <p className="eyebrow">Micro Empire V6.0</p>
+            <h2>Complete Free Edition</h2>
+            <p className="credits-lede">
+              A Toronto entrepreneurship simulation about building a company
+              without losing sight of the people, city and founder behind it.
+            </p>
+            <div className="edition-grid">
+              <span>
+                <i>◆</i>
+                <b>Complete campaign</b>
+                <small>30 days, four stages and founder legacies</small>
+              </span>
+              <span>
+                <i>⌂</i>
+                <b>Living Toronto</b>
+                <small>Eight destinations, residents, weather and policy</small>
+              </span>
+              <span>
+                <i>♥</i>
+                <b>Human stories</b>
+                <small>Mentors, rivals, teams and delayed consequences</small>
+              </span>
+              <span>
+                <i>♛</i>
+                <b>Replay progression</b>
+                <small>Trials, modifiers, XP, badges and Hall of Fame</small>
+              </span>
+            </div>
+            <div className="credits-list">
+              <p>
+                <small>CREATED BY</small>
+                <b>Learning Semantics</b>
+              </p>
+              <p>
+                <small>DESIGN &amp; DIRECTION</small>
+                <b>Amol Muzumdar</b>
+              </p>
+              <p>
+                <small>BUILT WITH</small>
+                <b>React · TypeScript · Vite · Web Audio</b>
+              </p>
+              <p>
+                <small>EDITION</small>
+                <b>V6.0 · July 2026</b>
+              </p>
+            </div>
+            <div className="privacy-note">
+              <b>Private by default</b>
+              <span>
+                Game saves, founder progression, settings and run history remain
+                in this browser. V6.0 has no account, advertising SDK or
+                analytics tracker.
+              </span>
+            </div>
+            <div className="credits-actions">
+              <a
+                href="https://github.com/learningsemantics/micro-empire-game/issues/new?title=V6.0%20Player%20Feedback&body=What%20I%20enjoyed%3A%0A%0AWhat%20was%20confusing%3A%0A%0AMy%20suggestion%3A"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Send feedback
+              </a>
+              <button className="primary" onClick={() => setShowCredits(false)}>
+                Return to Toronto
+              </button>
+            </div>
           </div>
         </div>
       )}

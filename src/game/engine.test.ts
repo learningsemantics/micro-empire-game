@@ -32,6 +32,7 @@ import {
   xpToNextLevel,
 } from "./progression";
 import { dayPhase, safeVolume, soundscapeFor } from "./atmosphere";
+import { founderLegacy, legacyPillars } from "./finale";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -187,6 +188,36 @@ describe("audio and atmosphere", () => {
     expect(safeVolume(-1)).toBe(0);
     expect(safeVolume(2)).toBe(1);
     expect(safeVolume(0.4)).toBe(0.4);
+  });
+});
+
+describe("complete-edition finale", () => {
+  const base = {
+    cash: 4000,
+    reputation: 70,
+    socialCapital: 30,
+    ethics: 60,
+    branches: 1,
+    staff: 1,
+    health: 70,
+    crises: 2,
+  };
+
+  it("selects distinct legacies from the full campaign outcome", () => {
+    expect(founderLegacy({ ...base, ethics: 20 }).id).toBe("ruthless");
+    expect(
+      founderLegacy({ ...base, reputation: 90, socialCapital: 75 }).id,
+    ).toBe("community");
+    expect(founderLegacy({ ...base, cash: 10000, branches: 4 }).id).toBe(
+      "empire",
+    );
+  });
+
+  it("keeps every legacy pillar inside a 0–100 range", () => {
+    const pillars = legacyPillars({ ...base, cash: 999999, ethics: -20 });
+    expect(
+      Object.values(pillars).every((value) => value >= 0 && value <= 100),
+    ).toBe(true);
   });
 });
 
