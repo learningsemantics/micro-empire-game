@@ -46,6 +46,13 @@ import {
 } from "./game/progression";
 import { dayPhase, safeVolume, soundscapeFor } from "./game/atmosphere";
 import { founderLegacy, legacyPillars } from "./game/finale";
+import {
+  COMMUNITY_STATUS,
+  EDITIONS,
+  canAccessCommercial,
+  normalizeEditionStatus,
+  type EditionStatus,
+} from "./game/commercial";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -1372,6 +1379,9 @@ export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
+  const [showCommercial, setShowCommercial] = useState(false);
+  const [editionStatus, setEditionStatus] =
+    useState<EditionStatus>(COMMUNITY_STATUS);
   const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1598,8 +1608,15 @@ export default function Home() {
   useEffect(() => {
     if ("serviceWorker" in navigator)
       navigator.serviceWorker
-        .register("/micro-empire-game/sw.js")
+        .register(`${import.meta.env.BASE_URL}sw.js`)
         .catch(() => undefined);
+  }, []);
+  useEffect(() => {
+    if (import.meta.env.BASE_URL !== "/") return;
+    fetch("/api/edition", { credentials: "same-origin" })
+      .then((response) => (response.ok ? response.json() : null))
+      .then((value) => setEditionStatus(normalizeEditionStatus(value)))
+      .catch(() => setEditionStatus(COMMUNITY_STATUS));
   }, []);
 
   const business = game.business ? BUSINESSES[game.business] : null;
@@ -4278,6 +4295,19 @@ export default function Home() {
           <Stat icon="◷" label="Time" value={clock} />
         </div>
         <button
+          className={`edition-pill ${canAccessCommercial(editionStatus) ? "founder" : "community"}`}
+          onClick={() => setShowCommercial(true)}
+        >
+          <small>
+            {editionStatus.source === "vercel" ? "VERCEL" : "COMMUNITY"}
+          </small>
+          <b>
+            {canAccessCommercial(editionStatus)
+              ? "Founder Licence"
+              : "Free Edition"}
+          </b>
+        </button>
+        <button
           className="icon-button"
           onClick={() => setSound(!sound)}
           aria-label="Toggle sound"
@@ -4309,7 +4339,7 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V6.0 · Complete Free Edition</div>
+            <div className="ribbon">V6.1 · Community + Commercial</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -4344,6 +4374,12 @@ export default function Home() {
               onClick={() => setShowCredits(true)}
             >
               Complete Free Edition · What’s included?
+            </button>
+            <button
+              className="commercial-preview"
+              onClick={() => setShowCommercial(true)}
+            >
+              Explore the Founder Licence →
             </button>
           </div>
           <Neighbourhood active={game.business || "coffee"} people={6} />
@@ -7056,6 +7092,108 @@ export default function Home() {
               <button className="primary" onClick={() => setShowCredits(false)}>
                 Return to Toronto
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showCommercial && (
+        <div
+          className="help-backdrop commercial-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Micro Empire editions"
+        >
+          <div className="help-card commercial-card">
+            <button className="close" onClick={() => setShowCommercial(false)}>
+              ×
+            </button>
+            <p className="eyebrow">Micro Empire V6.1</p>
+            <h2>Free community. Licensed expansion.</h2>
+            <p className="commercial-lede">
+              The complete V6.0 game stays free. The Founder Licence will fund
+              cloud services, new campaigns and advanced tools—without taking
+              Community features away.
+            </p>
+            <div className="edition-comparison">
+              {(["community", "founder"] as const).map((key) => (
+                <article key={key} className={key}>
+                  <i>{key === "community" ? "♥" : "♛"}</i>
+                  <small>
+                    {key === "community"
+                      ? "AVAILABLE NOW"
+                      : "COMMERCIAL ROADMAP"}
+                  </small>
+                  <h3>{EDITIONS[key].name}</h3>
+                  <b>{EDITIONS[key].price}</b>
+                  <p>{EDITIONS[key].note}</p>
+                  <ul>
+                    {EDITIONS[key].features.map((feature) => (
+                      <li key={feature}>{feature}</li>
+                    ))}
+                  </ul>
+                </article>
+              ))}
+            </div>
+            <div className="commercial-status">
+              <span>
+                <small>DEPLOYMENT</small>
+                <b>
+                  {editionStatus.source === "vercel"
+                    ? "Vercel commercial runtime connected"
+                    : "GitHub Pages Community runtime"}
+                </b>
+              </span>
+              <span>
+                <small>SERVER ENTITLEMENT</small>
+                <b>{editionStatus.entitlement}</b>
+              </span>
+              <span>
+                <small>V6.1 SECURITY RULE</small>
+                <b>Commercial access defaults to denied</b>
+              </span>
+            </div>
+            <div className="commercial-roadmap">
+              <span className="done">
+                <b>6.1</b>
+                <small>Edition boundary</small>
+              </span>
+              <span>
+                <b>6.2</b>
+                <small>Accounts</small>
+              </span>
+              <span>
+                <b>6.3</b>
+                <small>Cloud saves</small>
+              </span>
+              <span>
+                <b>6.4</b>
+                <small>Stripe</small>
+              </span>
+              <span>
+                <b>6.5</b>
+                <small>Customer access</small>
+              </span>
+            </div>
+            <p className="commercial-integrity">
+              <b>No fake paywall:</b> V6.1 does not place a premium flag in
+              local storage. Founder access will activate only after a future
+              server verifies an authenticated licence.
+            </p>
+            <div className="commercial-actions">
+              <button
+                className="primary"
+                onClick={() => setShowCommercial(false)}
+              >
+                Continue Community Edition
+              </button>
+              <a
+                href="https://github.com/learningsemantics/micro-empire-game/issues/new?title=Founder%20Licence%20Interest&body=I%20am%20interested%20in%20the%20Micro%20Empire%20Founder%20Licence.%0A%0AI%20would%20use%20it%20for%3A"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Register Founder Licence interest
+              </a>
             </div>
           </div>
         </div>

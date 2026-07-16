@@ -3,5 +3,5 @@ import react from "@vitejs/plugin-react";
 
 export default defineConfig({
   plugins: [react()],
-  base: "/micro-empire-game/",
+  base: process.env.VERCEL ? "/" : "/micro-empire-game/",
 });

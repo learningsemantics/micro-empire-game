@@ -2,6 +2,20 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V6.1 Community + Commercial Foundation
+
+- Permanent Complete Free Community Edition with no removed V6.0 features
+- Founder Licence product definition for future commercial expansions and services
+- Dual-target Vite deployment for GitHub Pages and Vercel
+- Vercel server health and edition-entitlement endpoints
+- Server-owned commercial access boundary that defaults to denied
+- Responsive edition comparison and commercial roadmap interface
+- Relative PWA paths that work correctly on both hosting targets
+- Baseline security headers for Vercel deployments
+- No browser-only premium flag or fake client-side paywall
+
+V6.1 establishes architecture only. Authenticated accounts arrive in V6.2, cloud saves in V6.3, Stripe test-mode entitlements in V6.4, and customer access management in V6.5.
+
 ## V6.0 Complete Free Edition
 
 - Five founder legacy endings derived from ethics, community, expansion, leadership and resilience

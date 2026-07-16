@@ -33,6 +33,11 @@ import {
 } from "./progression";
 import { dayPhase, safeVolume, soundscapeFor } from "./atmosphere";
 import { founderLegacy, legacyPillars } from "./finale";
+import {
+  COMMUNITY_STATUS,
+  canAccessCommercial,
+  normalizeEditionStatus,
+} from "./commercial";
 
 describe("deterministic simulation engine", () => {
   it("returns the same seeded value for identical inputs", () => {
@@ -218,6 +223,38 @@ describe("complete-edition finale", () => {
     expect(
       Object.values(pillars).every((value) => value >= 0 && value <= 100),
     ).toBe(true);
+  });
+});
+
+describe("commercial edition boundary", () => {
+  it("keeps Community Edition available without authentication", () => {
+    expect(COMMUNITY_STATUS.edition).toBe("community");
+    expect(canAccessCommercial(COMMUNITY_STATUS)).toBe(false);
+  });
+
+  it("requires both a Founder edition and active server entitlement", () => {
+    expect(
+      canAccessCommercial({
+        edition: "founder",
+        entitlement: "active",
+        authenticated: true,
+        source: "vercel",
+        version: "6.1.0",
+      }),
+    ).toBe(true);
+    expect(
+      canAccessCommercial({
+        ...COMMUNITY_STATUS,
+        edition: "founder",
+        entitlement: "expired",
+      }),
+    ).toBe(false);
+  });
+
+  it("fails closed when an edition response is malformed", () => {
+    expect(normalizeEditionStatus({ edition: "founder" })).toEqual(
+      COMMUNITY_STATUS,
+    );
   });
 });
 
