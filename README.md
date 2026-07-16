@@ -16,6 +16,15 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 
 V6.1 establishes architecture only. Authenticated accounts arrive in V6.2, cloud saves in V6.3, Stripe test-mode entitlements in V6.4, and customer access management in V6.5.
 
+### Vercel deployment
+
+- Framework preset: auto-detected Vite
+- Install command: `npm install`
+- Build command: `npm run build`
+- Output directory: `dist`
+- Runtime: Node.js 22.x
+- No root-directory override
+
 ## V6.0 Complete Free Edition
 
 - Five founder legacy endings derived from ethics, community, expansion, leadership and resilience
