@@ -23,6 +23,7 @@ V6.1 establishes architecture only. Authenticated accounts arrive in V6.2, cloud
 - Build command: `npm run build`
 - Output directory: `dist`
 - Runtime: Node.js 22.x
+- TypeScript: 5.9.3 (pinned for Vercel Functions compatibility)
 - No root-directory override
 
 ## V6.0 Complete Free Edition
