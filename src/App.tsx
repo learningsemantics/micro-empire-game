@@ -1451,6 +1451,8 @@ export default function Home() {
   const [cloudBusy, setCloudBusy] = useState(false);
   const [cloudUpdatedAt, setCloudUpdatedAt] = useState("");
   const [cloudConflict, setCloudConflict] = useState<CloudSave | null>(null);
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingStatus, setBillingStatus] = useState("");
   const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1672,7 +1674,12 @@ export default function Home() {
   }, []);
   useEffect(() => {
     if (import.meta.env.BASE_URL !== "/") return;
-    fetch("/api/edition", {
+    refreshEdition();
+  }, [authSession]);
+
+  async function refreshEdition() {
+    if (import.meta.env.BASE_URL !== "/") return;
+    return fetch("/api/edition", {
       credentials: "same-origin",
       headers: authSession?.access_token
         ? { Authorization: `Bearer ${authSession.access_token}` }
@@ -1681,6 +1688,26 @@ export default function Home() {
       .then((response) => (response.ok ? response.json() : null))
       .then((value) => setEditionStatus(normalizeEditionStatus(value)))
       .catch(() => setEditionStatus(COMMUNITY_STATUS));
+  }
+
+  useEffect(() => {
+    const checkout = new URLSearchParams(window.location.search).get(
+      "checkout",
+    );
+    if (!checkout) return;
+    setShowCommercial(true);
+    if (checkout === "cancelled") {
+      setBillingStatus("Checkout cancelled. Nothing was charged.");
+      return;
+    }
+    setBillingStatus("Payment received. Verifying your Founder Licence…");
+    let checks = 0;
+    const timer = window.setInterval(() => {
+      checks += 1;
+      void refreshEdition();
+      if (checks >= 4) window.clearInterval(timer);
+    }, 1800);
+    return () => window.clearInterval(timer);
   }, [authSession]);
 
   async function uploadCloudSave(raw?: string, expectedUpdatedAt?: string) {
@@ -1816,6 +1843,40 @@ export default function Home() {
     if (await uploadCloudSave(undefined, remote?.updatedAt)) {
       setCloudReady(true);
       setCloudStatus("This device replaced the cloud snapshot");
+    }
+  }
+
+  async function startFounderCheckout() {
+    if (!authSession?.access_token) {
+      setShowCommercial(false);
+      setShowAccount(true);
+      setAuthMode("signin");
+      setAuthMessage("Sign in before starting Founder Licence checkout.");
+      return;
+    }
+    setBillingBusy(true);
+    setBillingStatus("Opening secure Stripe Checkout…");
+    try {
+      const response = await fetch("/api/create-checkout", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authSession.access_token}` },
+      });
+      const value = await response.json().catch(() => ({}));
+      if (response.status === 503) {
+        setBillingStatus("Stripe test billing still needs configuration.");
+        return;
+      }
+      if (!response.ok || typeof value.url !== "string")
+        throw new Error("Checkout could not be started.");
+      window.location.assign(value.url);
+    } catch (error) {
+      setBillingStatus(
+        error instanceof Error
+          ? error.message
+          : "Checkout could not be started.",
+      );
+    } finally {
+      setBillingBusy(false);
     }
   }
 
@@ -4630,7 +4691,7 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V6.3 · Cross-Device Cloud Saves</div>
+            <div className="ribbon">V6.4 · Stripe Test Billing</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -7399,7 +7460,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowAccount(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.3</p>
+            <p className="eyebrow">Micro Empire V6.4</p>
             <h2>
               {authUser
                 ? "Your founder account"
@@ -7698,7 +7759,7 @@ export default function Home() {
                 <b>6.3</b>
                 <small>Cloud saves</small>
               </span>
-              <span>
+              <span className="done">
                 <b>6.4</b>
                 <small>Stripe</small>
               </span>
@@ -7708,11 +7769,15 @@ export default function Home() {
               </span>
             </div>
             <p className="commercial-integrity">
-              <b>Private by design:</b> V6.3 protects every cloud snapshot with
-              account ownership and database row-level security. An account does
-              not grant a paid licence; Founder access will activate only after
-              a future server verifies payment.
+              <b>Verified commerce:</b> V6.4 activates Founder access only after
+              Stripe signs a subscription webhook and the server confirms an
+              active entitlement. Community features remain free.
             </p>
+            {billingStatus && (
+              <p className="billing-message" role="status">
+                {billingStatus}
+              </p>
+            )}
             <div className="commercial-actions">
               <button
                 className="primary"
@@ -7720,13 +7785,19 @@ export default function Home() {
               >
                 Continue Community Edition
               </button>
-              <a
-                href="https://github.com/learningsemantics/micro-empire-game/issues/new?title=Founder%20Licence%20Interest&body=I%20am%20interested%20in%20the%20Micro%20Empire%20Founder%20Licence.%0A%0AI%20would%20use%20it%20for%3A"
-                target="_blank"
-                rel="noreferrer"
+              <button
+                className="founder-checkout"
+                disabled={billingBusy || canAccessCommercial(editionStatus)}
+                onClick={() => void startFounderCheckout()}
               >
-                Register Founder Licence interest
-              </a>
+                {canAccessCommercial(editionStatus)
+                  ? "Founder Licence active"
+                  : billingBusy
+                    ? "Opening Stripe…"
+                    : authUser
+                      ? "Start test checkout"
+                      : "Sign in to get Founder Licence"}
+              </button>
             </div>
           </div>
         </div>

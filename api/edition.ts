@@ -8,6 +8,8 @@ export async function GET(request: Request) {
   );
   const token = match?.[1]?.trim() || null;
   let authenticated = false;
+  let activeSubscription = false;
+  let billingAvailable = true;
   if (token) {
     const url =
       process.env.SUPABASE_URL ||
@@ -26,15 +28,30 @@ export async function GET(request: Request) {
       });
       const { data, error } = await supabase.auth.getUser(token);
       authenticated = !error && Boolean(data.user);
+      if (authenticated && data.user) {
+        const { data: subscription, error: subscriptionError } = await supabase
+          .from("subscriptions")
+          .select("status,current_period_end")
+          .eq("user_id", data.user.id)
+          .maybeSingle();
+        billingAvailable = !subscriptionError;
+        activeSubscription = Boolean(
+          subscription && ["active", "trialing"].includes(subscription.status),
+        );
+      }
     }
   }
   return Response.json(
     {
-      edition: "community",
-      entitlement: "community",
+      edition: activeSubscription ? "founder" : "community",
+      entitlement: activeSubscription
+        ? "active"
+        : authenticated && !billingAvailable
+          ? "unavailable"
+          : "community",
       authenticated,
       source: "vercel",
-      version: "6.3.0",
+      version: "6.4.0",
       authRequiredForCommercial: true,
     },
     { headers: { "Cache-Control": "private, no-store" } },

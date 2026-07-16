@@ -2,6 +2,27 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V6.4 Stripe Test Billing & Entitlements
+
+V6.4 adds Stripe Checkout in subscription mode, reusable billing customers, signed webhook processing, subscription lifecycle synchronization, and server-verified Founder entitlements. Only `active` and `trialing` Stripe subscriptions unlock the Founder Licence; missing configuration, invalid sessions, incomplete payments, and unavailable billing records all fail closed.
+
+The Complete Free Community Edition remains unchanged. V6.4 should stay in Stripe test mode until the product, price, taxes, refund policy, customer support, and production webhook have been reviewed.
+
+### Activate billing
+
+1. Run [`supabase/migrations/20260716170000_billing.sql`](supabase/migrations/20260716170000_billing.sql) in the Supabase SQL Editor.
+2. In Stripe test mode, create a recurring Founder Licence product and price.
+3. Add these server-only Vercel variables to Preview and Production:
+   - `STRIPE_SECRET_KEY` — Stripe test secret key
+   - `STRIPE_FOUNDER_PRICE_ID` — recurring test price ID
+   - `SUPABASE_SERVICE_ROLE_KEY` — Supabase service-role key
+   - `APP_URL` — `https://micro-empire.vercel.app`
+4. Deploy once so `/api/stripe-webhook` is available.
+5. In Stripe Workbench, create a webhook event destination for `https://micro-empire.vercel.app/api/stripe-webhook` and subscribe to `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`.
+6. Add its signing secret to Vercel as `STRIPE_WEBHOOK_SECRET`, then redeploy.
+
+Never expose the Stripe secret key, webhook secret, or Supabase service-role key through `VITE_` variables or browser code. Stripe recommends subscription lifecycle webhooks because access changes asynchronously, and webhook signatures must be verified against the raw request body.
+
 ## V6.3 Cross-Device Cloud Saves
 
 Signed-in Vercel players can now synchronize their current campaign across devices. V6.3 adds automatic background sync, manual sync status, local-first offline protection, server-side token verification, per-player storage, and an explicit conflict screen when another device has newer progress.
