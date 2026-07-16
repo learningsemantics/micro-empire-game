@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V6.3 Cross-Device Cloud Saves
+
+Signed-in Vercel players can now synchronize their current campaign across devices. V6.3 adds automatic background sync, manual sync status, local-first offline protection, server-side token verification, per-player storage, and an explicit conflict screen when another device has newer progress.
+
+Cloud snapshots are protected by Supabase Row Level Security. Every read and write is limited to the authenticated player's user ID. The GitHub Pages Community Edition remains fully playable with local saves and no account.
+
+### Activate the cloud-save table
+
+Run [`supabase/migrations/20260716150000_cloud_saves.sql`](supabase/migrations/20260716150000_cloud_saves.sql) once in the Supabase SQL Editor. The migration creates the `cloud_saves` table, ownership policies, grants, and automatic update timestamps. Until the migration is applied, V6.3 safely reports “Cloud database setup required” and continues protecting progress locally.
+
 ## V6.2 Player Accounts
 
 The Vercel edition now includes optional Supabase-powered founder accounts: email/password signup and sign-in, magic links, password recovery, persistent sessions, display names, and sign-out. The server validates each access token before reporting an authenticated session. Accounts do not unlock paid features yet.

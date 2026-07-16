@@ -55,6 +55,7 @@ import {
   type EditionStatus,
 } from "./game/commercial";
 import { getSupabaseClient } from "./game/auth";
+import { newerSave, normalizeCloudSave, type CloudSave } from "./game/cloud";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -1377,6 +1378,54 @@ function money(n: number) {
     maximumFractionDigits: 0,
   }).format(n);
 }
+
+function restoreGame(prior: GameState): GameState {
+  const migratedBranches = prior.branches?.length
+    ? prior.branches
+    : prior.business
+      ? [
+          {
+            id: 1,
+            name: `${DISTRICTS[prior.district as DistrictKey].name} Flagship`,
+            city: prior.district,
+            business: prior.business,
+            level: 1,
+            inventory: prior.capacity || 5,
+            maxInventory: prior.maxCapacity || 5,
+            manager: null,
+            lifetimeRevenue: 0,
+            propertyValue: PROPERTY_COST[prior.district as CityKey],
+          },
+        ]
+      : [];
+  return {
+    ...initialState,
+    ...prior,
+    branches: migratedBranches,
+    residents: prior.residents?.length ? prior.residents : makeResidents(),
+    rivals: prior.rivals?.length ? prior.rivals : makeRivals(),
+    neighbourhoodHeat: {
+      ...initialState.neighbourhoodHeat,
+      ...(prior.neighbourhoodHeat || {}),
+    },
+    skills: { ...initialState.skills, ...(prior.skills || {}) },
+    mentorTrust: {
+      ...initialState.mentorTrust,
+      ...(prior.mentorTrust || {}),
+    },
+    staff: (prior.staff || []).map((member: StaffMember) => ({
+      ...member,
+      tenure: member.tenure || 0,
+      loyalty: member.loyalty || 70,
+    })),
+    segmentSales: {
+      ...initialState.segmentSales,
+      ...(prior.segmentSales || {}),
+    },
+    customer: null,
+    phase: "home",
+  };
+}
 export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
@@ -1397,6 +1446,11 @@ export default function Home() {
   const [authDisplayName, setAuthDisplayName] = useState("");
   const [authMessage, setAuthMessage] = useState("");
   const [authBusy, setAuthBusy] = useState(false);
+  const [cloudStatus, setCloudStatus] = useState("Cloud sync waiting");
+  const [cloudReady, setCloudReady] = useState(false);
+  const [cloudBusy, setCloudBusy] = useState(false);
+  const [cloudUpdatedAt, setCloudUpdatedAt] = useState("");
+  const [cloudConflict, setCloudConflict] = useState<CloudSave | null>(null);
   const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1450,53 +1504,7 @@ export default function Home() {
           const prior = loaded.state;
           if (loaded.recovered)
             setSaveStatus("Recovered previous autosave backup");
-          const migratedBranches = prior.branches?.length
-            ? prior.branches
-            : prior.business
-              ? [
-                  {
-                    id: 1,
-                    name: `${DISTRICTS[prior.district as DistrictKey].name} Flagship`,
-                    city: prior.district,
-                    business: prior.business,
-                    level: 1,
-                    inventory: prior.capacity || 5,
-                    maxInventory: prior.maxCapacity || 5,
-                    manager: null,
-                    lifetimeRevenue: 0,
-                    propertyValue: PROPERTY_COST[prior.district as CityKey],
-                  },
-                ]
-              : [];
-          setGame({
-            ...initialState,
-            ...prior,
-            branches: migratedBranches,
-            residents: prior.residents?.length
-              ? prior.residents
-              : makeResidents(),
-            rivals: prior.rivals?.length ? prior.rivals : makeRivals(),
-            neighbourhoodHeat: {
-              ...initialState.neighbourhoodHeat,
-              ...(prior.neighbourhoodHeat || {}),
-            },
-            skills: { ...initialState.skills, ...(prior.skills || {}) },
-            mentorTrust: {
-              ...initialState.mentorTrust,
-              ...(prior.mentorTrust || {}),
-            },
-            staff: (prior.staff || []).map((m: StaffMember) => ({
-              ...m,
-              tenure: m.tenure || 0,
-              loyalty: m.loyalty || 70,
-            })),
-            segmentSales: {
-              ...initialState.segmentSales,
-              ...(prior.segmentSales || {}),
-            },
-            customer: null,
-            phase: "home",
-          });
+          setGame(restoreGame(prior));
         } catch {
           /* ignore invalid save */
         }
@@ -1674,6 +1682,142 @@ export default function Home() {
       .then((value) => setEditionStatus(normalizeEditionStatus(value)))
       .catch(() => setEditionStatus(COMMUNITY_STATUS));
   }, [authSession]);
+
+  async function uploadCloudSave(raw?: string, expectedUpdatedAt?: string) {
+    if (!authSession?.access_token) return false;
+    const localRaw = raw || localStorage.getItem(SAVE_KEY);
+    if (!localRaw) return false;
+    setCloudBusy(true);
+    setCloudStatus("Uploading encrypted session…");
+    try {
+      const response = await fetch("/api/cloud-save", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authSession.access_token}`,
+        },
+        body: JSON.stringify({
+          save: JSON.parse(localRaw),
+          expectedUpdatedAt,
+        }),
+      });
+      const value = await response.json().catch(() => ({}));
+      if (response.status === 503) {
+        setCloudStatus("Cloud database setup required");
+        return false;
+      }
+      if (response.status === 409) {
+        setCloudStatus("A newer cloud snapshot needs review");
+        setCloudReady(false);
+        return false;
+      }
+      if (!response.ok) throw new Error("Cloud upload failed");
+      setCloudUpdatedAt(String(value.updatedAt || ""));
+      setCloudStatus("Cloud save synchronized");
+      setCloudReady(true);
+      return true;
+    } catch {
+      setCloudStatus("Offline — local autosave is protected");
+      return false;
+    } finally {
+      setCloudBusy(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!hydrated) return;
+    if (!authSession?.access_token) {
+      setCloudReady(false);
+      setCloudConflict(null);
+      setCloudUpdatedAt("");
+      setCloudStatus(
+        authClient ? "Sign in to sync across devices" : "Local saves only",
+      );
+      return;
+    }
+    let active = true;
+    setCloudBusy(true);
+    setCloudStatus("Checking cloud save…");
+    fetch("/api/cloud-save", {
+      headers: { Authorization: `Bearer ${authSession.access_token}` },
+      cache: "no-store",
+    })
+      .then(async (response) => ({
+        response,
+        value: await response.json().catch(() => null),
+      }))
+      .then(async ({ response, value }) => {
+        if (!active) return;
+        if (response.status === 404) {
+          setCloudBusy(false);
+          await uploadCloudSave();
+          return;
+        }
+        if (response.status === 503) {
+          setCloudStatus("Cloud database setup required");
+          return;
+        }
+        if (!response.ok) throw new Error("Cloud read failed");
+        const remote = normalizeCloudSave(value);
+        if (!remote) throw new Error("Invalid cloud snapshot");
+        setCloudUpdatedAt(remote.updatedAt);
+        const localRaw = localStorage.getItem(SAVE_KEY);
+        const localSave = localRaw ? JSON.parse(localRaw) : null;
+        const winner = newerSave(localSave, remote);
+        if (winner === "remote") {
+          setCloudConflict(remote);
+          setCloudStatus("Newer progress found in the cloud");
+          setShowAccount(true);
+          setAuthMode("profile");
+        } else if (winner === "local") {
+          setCloudBusy(false);
+          await uploadCloudSave(localRaw || undefined, remote.updatedAt);
+        } else {
+          setCloudReady(true);
+          setCloudStatus("Cloud save synchronized");
+        }
+      })
+      .catch(() => setCloudStatus("Offline — local autosave is protected"))
+      .finally(() => {
+        if (active) setCloudBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [authSession, authClient, hydrated]);
+
+  useEffect(() => {
+    if (!hydrated || !cloudReady || !authSession?.access_token) return;
+    const timer = window.setTimeout(() => void uploadCloudSave(), 4000);
+    return () => window.clearTimeout(timer);
+  }, [game, hydrated, cloudReady, authSession]);
+
+  function restoreCloudSave() {
+    if (!cloudConflict) return;
+    try {
+      const raw = JSON.stringify(cloudConflict.save);
+      const restored = unwrapSave<GameState>(raw);
+      const current = localStorage.getItem(SAVE_KEY);
+      if (current) localStorage.setItem(BACKUP_SAVE_KEY, current);
+      localStorage.setItem(SAVE_KEY, raw);
+      setGame(restoreGame(restored.state));
+      setCloudUpdatedAt(cloudConflict.updatedAt);
+      setCloudConflict(null);
+      setCloudReady(true);
+      setCloudStatus("Cloud progress restored on this device");
+    } catch {
+      setCloudStatus("Cloud snapshot could not be restored");
+    }
+  }
+
+  async function keepLocalSave() {
+    const remote = cloudConflict;
+    setCloudConflict(null);
+    if (await uploadCloudSave(undefined, remote?.updatedAt)) {
+      setCloudReady(true);
+      setCloudStatus("This device replaced the cloud snapshot");
+    }
+  }
 
   async function submitAuth(
     action:
@@ -4486,7 +4630,7 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V6.2 · Player Accounts</div>
+            <div className="ribbon">V6.3 · Cross-Device Cloud Saves</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -7223,9 +7367,9 @@ export default function Home() {
             <div className="privacy-note">
               <b>Private by default</b>
               <span>
-                Game saves, founder progression, settings and run history remain
-                in this browser. V6.0 has no account, advertising SDK or
-                analytics tracker.
+                Community play remains local. Signed-in Vercel players may sync
+                their game snapshot to their private Supabase account. Micro
+                Empire has no advertising SDK or analytics tracker.
               </span>
             </div>
             <div className="credits-actions">
@@ -7255,16 +7399,16 @@ export default function Home() {
             <button className="close" onClick={() => setShowAccount(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.2</p>
+            <p className="eyebrow">Micro Empire V6.3</p>
             <h2>
               {authUser
                 ? "Your founder account"
                 : "Play free. Sign in when useful."}
             </h2>
             <p className="account-lede">
-              Accounts are optional in the complete Community Edition. Signing
-              in prepares your identity for cloud saves and commercial access
-              arriving in the next releases.
+              Accounts are optional in the complete Community Edition. Signed-in
+              players can now protect their current campaign and continue it on
+              another device.
             </p>
 
             {!authReady && <p className="auth-notice">Connecting securely…</p>}
@@ -7419,7 +7563,54 @@ export default function Home() {
                 >
                   Sign out
                 </button>
+                <section className="cloud-panel">
+                  <span
+                    className={`cloud-indicator ${cloudReady ? "ready" : ""}`}
+                  >
+                    {cloudBusy ? "↻" : cloudReady ? "✓" : "☁"}
+                  </span>
+                  <div>
+                    <small>CROSS-DEVICE SAVE</small>
+                    <b>{cloudStatus}</b>
+                    {cloudUpdatedAt && (
+                      <em>
+                        Server snapshot ·{" "}
+                        {new Date(cloudUpdatedAt).toLocaleString("en-CA", {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </em>
+                    )}
+                  </div>
+                  <button
+                    disabled={cloudBusy || Boolean(cloudConflict)}
+                    onClick={() => void uploadCloudSave()}
+                  >
+                    Sync now
+                  </button>
+                </section>
               </div>
+            )}
+            {cloudConflict && (
+              <section className="cloud-conflict" role="alert">
+                <b>Newer progress exists in the cloud</b>
+                <p>
+                  That snapshot was saved{" "}
+                  {new Date(cloudConflict.clientSavedAt).toLocaleString(
+                    "en-CA",
+                    { dateStyle: "medium", timeStyle: "short" },
+                  )}
+                  . Choose which campaign should become your active save.
+                </p>
+                <div>
+                  <button className="primary" onClick={restoreCloudSave}>
+                    Use cloud progress
+                  </button>
+                  <button onClick={() => void keepLocalSave()}>
+                    Keep this device
+                  </button>
+                </div>
+              </section>
             )}
             {authMessage && (
               <p className="auth-message" role="status">
@@ -7445,7 +7636,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowCommercial(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.2</p>
+            <p className="eyebrow">Micro Empire V6.3</p>
             <h2>Free community. Licensed expansion.</h2>
             <p className="commercial-lede">
               The complete V6.0 game stays free. The Founder Licence will fund
@@ -7503,7 +7694,7 @@ export default function Home() {
                 <b>6.2</b>
                 <small>Accounts</small>
               </span>
-              <span>
+              <span className="done">
                 <b>6.3</b>
                 <small>Cloud saves</small>
               </span>
@@ -7517,9 +7708,10 @@ export default function Home() {
               </span>
             </div>
             <p className="commercial-integrity">
-              <b>Secure by design:</b> V6.2 verifies signed-in players on the
-              server. An account does not grant a paid licence; Founder access
-              will activate only after a future server verifies payment.
+              <b>Private by design:</b> V6.3 protects every cloud snapshot with
+              account ownership and database row-level security. An account does
+              not grant a paid licence; Founder access will activate only after
+              a future server verifies payment.
             </p>
             <div className="commercial-actions">
               <button

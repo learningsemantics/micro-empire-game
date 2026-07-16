@@ -3977,6 +3977,80 @@ button:focus-visible {
   font-size: 20px;
   font-weight: 900;
 }
+.cloud-panel {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: 38px 1fr auto;
+  gap: 9px;
+  align-items: center;
+  border-top: 1px solid #c9c1df;
+  padding-top: 12px;
+}
+.cloud-panel > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+.cloud-panel small {
+  color: #6c58a2;
+  font-size: 6px;
+}
+.cloud-panel b {
+  font-size: 8px;
+}
+.cloud-panel em {
+  color: #657575;
+  font-size: 6px;
+  font-style: normal;
+}
+.cloud-panel button,
+.cloud-conflict button:not(.primary) {
+  border: 1px solid #7561a9;
+  border-radius: 8px;
+  background: white;
+  padding: 9px;
+  color: #443969;
+  font: inherit;
+  font-size: 7px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.cloud-indicator {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: #ded8ec;
+  color: #6c58a2;
+  font-size: 16px;
+}
+.cloud-indicator.ready {
+  background: #dff2eb;
+  color: #16817f;
+}
+.cloud-conflict {
+  margin-top: 10px;
+  border: 2px solid #e0a726;
+  border-radius: 12px;
+  background: #fff3cd;
+  padding: 12px;
+}
+.cloud-conflict > b {
+  font-size: 10px;
+}
+.cloud-conflict p {
+  font-size: 8px;
+  line-height: 1.5;
+}
+.cloud-conflict > div {
+  display: flex;
+  gap: 6px;
+}
+.cloud-conflict .primary {
+  margin: 0;
+}
 .commercial-preview {
   display: block;
   margin-top: 8px;
@@ -4129,6 +4203,12 @@ button:focus-visible {
   }
   .account-pill small {
     display: none;
+  }
+  .cloud-panel {
+    grid-template-columns: 38px 1fr;
+  }
+  .cloud-panel button {
+    grid-column: 1 / -1;
   }
   .edition-comparison {
     grid-template-columns: 1fr;
