@@ -3824,6 +3824,159 @@ button:focus-visible {
 .edition-pill.founder {
   border-color: #f0b946;
 }
+.account-pill {
+  display: flex;
+  flex-direction: column;
+  max-width: 150px;
+  border: 1px solid #7561a9;
+  border-radius: 9px;
+  background: #312750;
+  color: white;
+  padding: 6px 9px;
+  text-align: left;
+  cursor: pointer;
+}
+.account-pill small {
+  font-size: 5px;
+  color: #cfc0ff;
+  letter-spacing: 1px;
+}
+.account-pill b {
+  overflow: hidden;
+  font-size: 8px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-backdrop {
+  z-index: 120;
+  background: linear-gradient(#1b1637ed, #071f25fa);
+}
+.account-card {
+  width: min(560px, 94vw) !important;
+  text-align: left !important;
+}
+.account-card > h2 {
+  margin-bottom: 6px;
+}
+.account-lede {
+  font-size: 9px;
+  line-height: 1.6;
+}
+.auth-notice,
+.auth-message,
+.auth-privacy {
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 8px;
+  line-height: 1.5;
+}
+.auth-notice {
+  background: #fff3cd;
+}
+.auth-message {
+  background: #dff2eb;
+  color: #14554e;
+}
+.auth-privacy {
+  margin-bottom: 0;
+  background: #e8e5f4;
+  color: #443969;
+}
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  margin: 12px 0;
+}
+.auth-tabs button,
+.auth-alternatives button {
+  border: 1px solid #7561a9;
+  border-radius: 8px;
+  background: white;
+  padding: 10px;
+  color: #443969;
+  font: inherit;
+  font-size: 8px;
+  font-weight: 900;
+  cursor: pointer;
+}
+.auth-tabs button.active {
+  background: #6c58a2;
+  color: white;
+}
+.auth-form,
+.profile-panel {
+  display: grid;
+  gap: 10px;
+}
+.auth-form label,
+.profile-panel label {
+  display: grid;
+  gap: 5px;
+  color: #394d4d;
+  font-size: 7px;
+  font-weight: 900;
+  letter-spacing: 0.4px;
+}
+.auth-form input,
+.profile-panel input {
+  box-sizing: border-box;
+  width: 100%;
+  border: 2px solid #b9c4bd;
+  border-radius: 8px;
+  background: white;
+  padding: 11px;
+  color: #173f45;
+  font: inherit;
+  font-size: 10px;
+}
+.auth-form .primary,
+.profile-panel .primary {
+  margin: 0;
+}
+.auth-alternatives {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.profile-panel {
+  grid-template-columns: 52px 1fr;
+  align-items: center;
+  border: 2px solid #7561a9;
+  border-radius: 12px;
+  padding: 14px;
+  background: #f3f0fa;
+}
+.profile-panel > label,
+.profile-panel > button {
+  grid-column: 1 / -1;
+}
+.profile-panel > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+.profile-panel > div small {
+  color: #6c58a2;
+  font-size: 6px;
+}
+.profile-panel > div b {
+  overflow: hidden;
+  font-size: 9px;
+  text-overflow: ellipsis;
+}
+.profile-avatar {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border-radius: 50%;
+  background: #6c58a2;
+  color: white;
+  font-size: 20px;
+  font-weight: 900;
+}
 .commercial-preview {
   display: block;
   margin-top: 8px;
@@ -3969,6 +4122,12 @@ button:focus-visible {
 }
 @media (max-width: 760px) {
   .edition-pill {
+    display: none;
+  }
+  .account-pill {
+    max-width: 92px;
+  }
+  .account-pill small {
     display: none;
   }
   .edition-comparison {

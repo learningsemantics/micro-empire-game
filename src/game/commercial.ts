@@ -40,7 +40,7 @@ export const COMMUNITY_STATUS: EditionStatus = {
   entitlement: "community",
   authenticated: false,
   source: "static",
-  version: "6.1.0",
+  version: "6.2.0",
 };
 
 export function canAccessCommercial(status: EditionStatus) {
@@ -62,6 +62,6 @@ export function normalizeEditionStatus(value: unknown): EditionStatus {
     entitlement: input.entitlement as EntitlementState,
     authenticated: Boolean(input.authenticated),
     source: input.source === "vercel" ? "vercel" : "static",
-    version: String(input.version || "6.1.0"),
+    version: String(input.version || "6.2.0"),
   };
 }

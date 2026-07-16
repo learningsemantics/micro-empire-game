@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Session, SupabaseClient, User } from "@supabase/supabase-js";
 import { BALANCE } from "./game/balance";
 import {
   CAMPAIGN_MISSIONS,
@@ -53,6 +54,7 @@ import {
   normalizeEditionStatus,
   type EditionStatus,
 } from "./game/commercial";
+import { getSupabaseClient } from "./game/auth";
 
 type BusinessKey = "coffee" | "career" | "agency";
 type DistrictKey = "junction" | "harbour" | "liberty";
@@ -1380,8 +1382,21 @@ export default function Home() {
   const [showHelp, setShowHelp] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showCommercial, setShowCommercial] = useState(false);
+  const [showAccount, setShowAccount] = useState(false);
   const [editionStatus, setEditionStatus] =
     useState<EditionStatus>(COMMUNITY_STATUS);
+  const [authClient, setAuthClient] = useState<SupabaseClient | null>(null);
+  const [authUser, setAuthUser] = useState<User | null>(null);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  const [authMode, setAuthMode] = useState<
+    "signin" | "signup" | "profile" | "recovery"
+  >("signin");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
   const [showAtmosphere, setShowAtmosphere] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState(0);
@@ -1612,12 +1627,130 @@ export default function Home() {
         .catch(() => undefined);
   }, []);
   useEffect(() => {
+    let active = true;
+    let unsubscribe: (() => void) | undefined;
+    getSupabaseClient().then(async (client) => {
+      if (!active) return;
+      setAuthClient(client);
+      if (!client) {
+        setAuthReady(true);
+        return;
+      }
+      const { data } = await client.auth.getSession();
+      if (!active) return;
+      setAuthSession(data.session);
+      setAuthUser(data.session?.user || null);
+      setAuthDisplayName(
+        String(data.session?.user.user_metadata?.display_name || ""),
+      );
+      setAuthReady(true);
+      const listener = client.auth.onAuthStateChange((event, session) => {
+        setAuthSession(session);
+        setAuthUser(session?.user || null);
+        setAuthDisplayName(
+          String(session?.user.user_metadata?.display_name || ""),
+        );
+        if (event === "PASSWORD_RECOVERY") {
+          setAuthMode("recovery");
+          setShowAccount(true);
+        } else if (session) setAuthMode("profile");
+      });
+      unsubscribe = () => listener.data.subscription.unsubscribe();
+    });
+    return () => {
+      active = false;
+      unsubscribe?.();
+    };
+  }, []);
+  useEffect(() => {
     if (import.meta.env.BASE_URL !== "/") return;
-    fetch("/api/edition", { credentials: "same-origin" })
+    fetch("/api/edition", {
+      credentials: "same-origin",
+      headers: authSession?.access_token
+        ? { Authorization: `Bearer ${authSession.access_token}` }
+        : {},
+    })
       .then((response) => (response.ok ? response.json() : null))
       .then((value) => setEditionStatus(normalizeEditionStatus(value)))
       .catch(() => setEditionStatus(COMMUNITY_STATUS));
-  }, []);
+  }, [authSession]);
+
+  async function submitAuth(
+    action:
+      "password" | "magic" | "reset" | "profile" | "new-password" | "signout",
+  ) {
+    if (!authClient) return;
+    setAuthBusy(true);
+    setAuthMessage("");
+    try {
+      if (action === "signout") {
+        const { error } = await authClient.auth.signOut();
+        if (error) throw error;
+        setAuthMode("signin");
+        setAuthMessage("Signed out. Your local Community save is still here.");
+      } else if (action === "magic") {
+        const { error } = await authClient.auth.signInWithOtp({
+          email: authEmail,
+          options: { emailRedirectTo: window.location.origin },
+        });
+        if (error) throw error;
+        setAuthMessage("Magic link sent. Check your email to continue.");
+      } else if (action === "reset") {
+        const { error } = await authClient.auth.resetPasswordForEmail(
+          authEmail,
+          {
+            redirectTo: `${window.location.origin}/?recovery=1`,
+          },
+        );
+        if (error) throw error;
+        setAuthMessage("Password recovery email sent.");
+      } else if (action === "profile") {
+        const { error } = await authClient.auth.updateUser({
+          data: { display_name: authDisplayName.trim() },
+        });
+        if (error) throw error;
+        setAuthMessage("Founder profile updated.");
+      } else if (action === "new-password") {
+        const { error } = await authClient.auth.updateUser({
+          password: authPassword,
+        });
+        if (error) throw error;
+        setAuthPassword("");
+        setAuthMode("profile");
+        setAuthMessage("Your new password is active.");
+      } else if (authMode === "signup") {
+        const { data, error } = await authClient.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+          options: {
+            emailRedirectTo: window.location.origin,
+            data: { display_name: authDisplayName.trim() },
+          },
+        });
+        if (error) throw error;
+        setAuthMessage(
+          data.session
+            ? "Account created. Welcome to Micro Empire."
+            : "Account created. Check your email to confirm it.",
+        );
+      } else {
+        const { error } = await authClient.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+        setAuthMessage(
+          "Signed in. Your session will stay active on this device.",
+        );
+      }
+    } catch (error) {
+      setAuthMessage(
+        error instanceof Error ? error.message : "Account request failed.",
+      );
+    } finally {
+      setAuthBusy(false);
+    }
+  }
 
   const business = game.business ? BUSINESSES[game.business] : null;
   const clock = `${game.hour > 12 ? game.hour - 12 : game.hour}:00 ${game.hour >= 12 ? "PM" : "AM"}`;
@@ -4308,6 +4441,20 @@ export default function Home() {
           </b>
         </button>
         <button
+          className="account-pill"
+          onClick={() => {
+            setAuthMode(authUser ? "profile" : "signin");
+            setShowAccount(true);
+          }}
+        >
+          <small>{authUser ? "FOUNDER ACCOUNT" : "OPTIONAL ACCOUNT"}</small>
+          <b>
+            {authUser
+              ? authDisplayName || authUser.email || "Signed in"
+              : "Sign in"}
+          </b>
+        </button>
+        <button
           className="icon-button"
           onClick={() => setSound(!sound)}
           aria-label="Toggle sound"
@@ -4339,7 +4486,7 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V6.1 · Community + Commercial</div>
+            <div className="ribbon">V6.2 · Player Accounts</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -7097,6 +7244,196 @@ export default function Home() {
         </div>
       )}
 
+      {showAccount && (
+        <div
+          className="help-backdrop account-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Founder account"
+        >
+          <div className="help-card account-card">
+            <button className="close" onClick={() => setShowAccount(false)}>
+              ×
+            </button>
+            <p className="eyebrow">Micro Empire V6.2</p>
+            <h2>
+              {authUser
+                ? "Your founder account"
+                : "Play free. Sign in when useful."}
+            </h2>
+            <p className="account-lede">
+              Accounts are optional in the complete Community Edition. Signing
+              in prepares your identity for cloud saves and commercial access
+              arriving in the next releases.
+            </p>
+
+            {!authReady && <p className="auth-notice">Connecting securely…</p>}
+            {authReady && !authClient && (
+              <p className="auth-notice">
+                Accounts are available on the Vercel edition. You can keep
+                playing the Community Edition anonymously here.
+              </p>
+            )}
+
+            {authClient && !authUser && (
+              <>
+                <div className="auth-tabs">
+                  <button
+                    className={authMode === "signin" ? "active" : ""}
+                    onClick={() => setAuthMode("signin")}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    className={authMode === "signup" ? "active" : ""}
+                    onClick={() => setAuthMode("signup")}
+                  >
+                    Create account
+                  </button>
+                </div>
+                <form
+                  className="auth-form"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    void submitAuth("password");
+                  }}
+                >
+                  {authMode === "signup" && (
+                    <label>
+                      Founder name
+                      <input
+                        value={authDisplayName}
+                        onChange={(event) =>
+                          setAuthDisplayName(event.target.value)
+                        }
+                        autoComplete="name"
+                        placeholder="How Toronto knows you"
+                      />
+                    </label>
+                  )}
+                  <label>
+                    Email
+                    <input
+                      type="email"
+                      required
+                      value={authEmail}
+                      onChange={(event) => setAuthEmail(event.target.value)}
+                      autoComplete="email"
+                      placeholder="founder@example.com"
+                    />
+                  </label>
+                  <label>
+                    Password
+                    <input
+                      type="password"
+                      required
+                      minLength={6}
+                      value={authPassword}
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                      autoComplete={
+                        authMode === "signup"
+                          ? "new-password"
+                          : "current-password"
+                      }
+                    />
+                  </label>
+                  <button className="primary" disabled={authBusy}>
+                    {authBusy
+                      ? "Working…"
+                      : authMode === "signup"
+                        ? "Create free account"
+                        : "Sign in"}
+                  </button>
+                </form>
+                <div className="auth-alternatives">
+                  <button
+                    disabled={authBusy || !authEmail}
+                    onClick={() => void submitAuth("magic")}
+                  >
+                    Email me a magic link
+                  </button>
+                  <button
+                    disabled={authBusy || !authEmail}
+                    onClick={() => void submitAuth("reset")}
+                  >
+                    Reset password
+                  </button>
+                </div>
+              </>
+            )}
+
+            {authClient && authUser && authMode === "recovery" && (
+              <form
+                className="auth-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void submitAuth("new-password");
+                }}
+              >
+                <label>
+                  New password
+                  <input
+                    type="password"
+                    required
+                    minLength={6}
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <button className="primary" disabled={authBusy}>
+                  Save new password
+                </button>
+              </form>
+            )}
+
+            {authClient && authUser && authMode !== "recovery" && (
+              <div className="profile-panel">
+                <span className="profile-avatar">
+                  {(authDisplayName || authUser.email || "F")
+                    .charAt(0)
+                    .toUpperCase()}
+                </span>
+                <div>
+                  <small>VERIFIED SESSION</small>
+                  <b>{authUser.email}</b>
+                </div>
+                <label>
+                  Founder display name
+                  <input
+                    value={authDisplayName}
+                    onChange={(event) => setAuthDisplayName(event.target.value)}
+                  />
+                </label>
+                <button
+                  className="primary"
+                  disabled={authBusy}
+                  onClick={() => void submitAuth("profile")}
+                >
+                  Update profile
+                </button>
+                <button
+                  className="text-button"
+                  disabled={authBusy}
+                  onClick={() => void submitAuth("signout")}
+                >
+                  Sign out
+                </button>
+              </div>
+            )}
+            {authMessage && (
+              <p className="auth-message" role="status">
+                {authMessage}
+              </p>
+            )}
+            <p className="auth-privacy">
+              Your password is handled by Supabase Auth and is never stored in
+              the game or local save file.
+            </p>
+          </div>
+        </div>
+      )}
+
       {showCommercial && (
         <div
           className="help-backdrop commercial-backdrop"
@@ -7108,7 +7445,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowCommercial(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.1</p>
+            <p className="eyebrow">Micro Empire V6.2</p>
             <h2>Free community. Licensed expansion.</h2>
             <p className="commercial-lede">
               The complete V6.0 game stays free. The Founder Licence will fund
@@ -7149,8 +7486,12 @@ export default function Home() {
                 <b>{editionStatus.entitlement}</b>
               </span>
               <span>
-                <small>V6.1 SECURITY RULE</small>
-                <b>Commercial access defaults to denied</b>
+                <small>PLAYER IDENTITY</small>
+                <b>
+                  {editionStatus.authenticated
+                    ? "Server verified"
+                    : "Anonymous session"}
+                </b>
               </span>
             </div>
             <div className="commercial-roadmap">
@@ -7158,7 +7499,7 @@ export default function Home() {
                 <b>6.1</b>
                 <small>Edition boundary</small>
               </span>
-              <span>
+              <span className="done">
                 <b>6.2</b>
                 <small>Accounts</small>
               </span>
@@ -7176,9 +7517,9 @@ export default function Home() {
               </span>
             </div>
             <p className="commercial-integrity">
-              <b>No fake paywall:</b> V6.1 does not place a premium flag in
-              local storage. Founder access will activate only after a future
-              server verifies an authenticated licence.
+              <b>Secure by design:</b> V6.2 verifies signed-in players on the
+              server. An account does not grant a paid licence; Founder access
+              will activate only after a future server verifies payment.
             </p>
             <div className="commercial-actions">
               <button

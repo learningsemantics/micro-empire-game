@@ -2,6 +2,16 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V6.2 Player Accounts
+
+The Vercel edition now includes optional Supabase-powered founder accounts: email/password signup and sign-in, magic links, password recovery, persistent sessions, display names, and sign-out. The server validates each access token before reporting an authenticated session. Accounts do not unlock paid features yet.
+
+The GitHub Pages Community Edition remains complete, anonymous, and free. No Supabase credentials or account are required to play it.
+
+### Vercel environment variables
+
+Connect Supabase to Vercel for Preview and Production. V6.2 recognizes the standard `SUPABASE_URL` plus `SUPABASE_PUBLISHABLE_KEY` or `SUPABASE_ANON_KEY` aliases created by common integrations. Public publishable/anon keys are intentionally safe for browser use; never configure or expose a Supabase service-role key in the client.
+
 ## V6.1 Community + Commercial Foundation
 
 - Permanent Complete Free Community Edition with no removed V6.0 features
@@ -14,7 +24,7 @@ A complete browser-based business strategy game. Choose a Coffee Cart, Career St
 - Baseline security headers for Vercel deployments
 - No browser-only premium flag or fake client-side paywall
 
-V6.1 establishes architecture only. Authenticated accounts arrive in V6.2, cloud saves in V6.3, Stripe test-mode entitlements in V6.4, and customer access management in V6.5.
+V6.1 established the deployment architecture. V6.2 adds authenticated accounts, cloud saves arrive in V6.3, Stripe test-mode entitlements in V6.4, and customer access management in V6.5.
 
 ### Vercel deployment
 
