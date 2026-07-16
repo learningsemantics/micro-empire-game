@@ -5,7 +5,13 @@ import {
   seededUnit,
   simulateRivalDay,
 } from "./engine";
-import { serializeSave, unwrapSave } from "./save";
+import {
+  loadSaveWithBackup,
+  portableBackup,
+  readPortableBackup,
+  serializeSave,
+  unwrapSave,
+} from "./save";
 import {
   CAMPAIGN_MISSIONS,
   chapterUnlocked,
@@ -195,5 +201,24 @@ describe("versioned saves", () => {
     const save = unwrapSave<{ day: number }>(JSON.stringify({ day: 3 }));
     expect(save.schemaVersion).toBe(0);
     expect(save.state.day).toBe(3);
+  });
+
+  it("recovers a valid backup when the primary snapshot is corrupt", () => {
+    const loaded = loadSaveWithBackup<{ day: number }>(
+      "not-json",
+      serializeSave({ day: 9 }),
+    );
+    expect(loaded?.state.day).toBe(9);
+    expect(loaded?.recovered).toBe(true);
+  });
+
+  it("round trips a portable full-player backup", () => {
+    const raw = portableBackup({ profile: { xp: 250 }, runs: 2 });
+    expect(
+      readPortableBackup<{ profile: { xp: number }; runs: number }>(raw),
+    ).toEqual({
+      profile: { xp: 250 },
+      runs: 2,
+    });
   });
 });

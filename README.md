@@ -2,6 +2,18 @@
 
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
+## V5.9 Launch Candidate
+
+- Four-step first-run onboarding focused on operating rhythm and founder judgment
+- Previous-valid-snapshot autosave protection and automatic corruption recovery
+- Portable full-player backups covering game, history, profile and accessibility settings
+- Manual previous-save recovery and guided-tour replay controls
+- Fully seeded supplier, competitor and daily-event outcomes for reproducible challenges
+- Save-health reporting with local snapshot timestamps
+- Mobile launch refinements for navigation, modals, objectives and touch targets
+- Save schema V3 with legacy compatibility
+- Automated tests for backup recovery, portable data and deterministic outcomes
+
 ## V5.8 Audio & Atmosphere
 
 - Procedural browser-generated Toronto soundscapes with no external audio assets

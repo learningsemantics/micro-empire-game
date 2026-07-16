@@ -16,7 +16,15 @@ import {
   seededUnit,
   simulateRivalDay,
 } from "./game/engine";
-import { SAVE_KEY, serializeSave, unwrapSave } from "./game/save";
+import {
+  BACKUP_SAVE_KEY,
+  SAVE_KEY,
+  loadSaveWithBackup,
+  portableBackup,
+  readPortableBackup,
+  serializeSave,
+  unwrapSave,
+} from "./game/save";
 import {
   RUN_MODIFIERS,
   dailyObjective,
@@ -1362,6 +1370,10 @@ export default function Home() {
   const [game, setGame] = useState<GameState>(initialState);
   const [showHelp, setShowHelp] = useState(false);
   const [showAtmosphere, setShowAtmosphere] = useState(false);
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+  const [saveStatus, setSaveStatus] = useState("Autosave ready");
+  const [lastSavedAt, setLastSavedAt] = useState("");
   const [sound, setSound] = useState(true);
   const [ambience, setAmbience] = useState(true);
   const [masterVolume, setMasterVolume] = useState(0.65);
@@ -1401,10 +1413,15 @@ export default function Home() {
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      const saved = localStorage.getItem(SAVE_KEY);
-      if (saved)
+      const loaded = loadSaveWithBackup<GameState>(
+        localStorage.getItem(SAVE_KEY),
+        localStorage.getItem(BACKUP_SAVE_KEY),
+      );
+      if (loaded)
         try {
-          const { state: prior } = unwrapSave<GameState>(saved);
+          const prior = loaded.state;
+          if (loaded.recovered)
+            setSaveStatus("Recovered previous autosave backup");
           const migratedBranches = prior.branches?.length
             ? prior.branches
             : prior.business
@@ -1486,11 +1503,29 @@ export default function Home() {
       } catch {
         /* defaults remain active */
       }
+      if (!localStorage.getItem("micro-empire-onboarding-complete") && !loaded)
+        setShowOnboarding(true);
     }, 0);
     return () => window.clearTimeout(timer);
   }, []);
   useEffect(() => {
-    if (hydrated) localStorage.setItem(SAVE_KEY, serializeSave(game));
+    if (!hydrated) return;
+    const current = localStorage.getItem(SAVE_KEY);
+    if (current) {
+      try {
+        unwrapSave<GameState>(current);
+        localStorage.setItem(BACKUP_SAVE_KEY, current);
+      } catch {
+        /* never replace a backup with corrupt data */
+      }
+    }
+    localStorage.setItem(SAVE_KEY, serializeSave(game));
+    const savedAt = new Date().toLocaleTimeString("en-CA", {
+      hour: "numeric",
+      minute: "2-digit",
+    });
+    setLastSavedAt(savedAt);
+    setSaveStatus(`Saved locally at ${savedAt}`);
   }, [game, hydrated]);
   useEffect(() => {
     if (!hydrated || game.phase !== "result" || !game.runId) return;
@@ -1808,7 +1843,8 @@ export default function Home() {
     setWorldView("city");
     setConsoleGroup("business");
     setOpsTab("trade");
-    setShowHelp(true);
+    if (!localStorage.getItem("micro-empire-onboarding-complete"))
+      setShowOnboarding(true);
   }
 
   function cityDemand(g: GameState) {
@@ -2130,7 +2166,8 @@ export default function Home() {
     );
     if (!missing || game.cash < cost) return;
     const delivered =
-      Math.random() * 100 <= supplier.reliability
+      seededUnit(game.seed, game.day, game.hour + game.marketing) * 100 <=
+      supplier.reliability
         ? game.maxCapacity
         : Math.max(game.capacity + 1, Math.round(game.maxCapacity * 0.65));
     advance((g) => ({
@@ -2288,7 +2325,10 @@ export default function Home() {
         1.35,
       ),
       reputation: clamp(
-        c.reputation + (Math.random() > 0.45 ? Math.round(2 * rival) : -1),
+        c.reputation +
+          (seededUnit(g.seed, g.day, 700 + i) > 0.45
+            ? Math.round(2 * rival)
+            : -1),
         25,
         95,
       ),
@@ -2380,7 +2420,13 @@ export default function Home() {
         }),
       },
     ];
-    const ev = events[Math.floor(Math.random() * events.length)];
+    const eventDay = (base || game).day + 1;
+    const ev =
+      events[
+        Math.floor(
+          seededUnit((base || game).seed, eventDay, 909) * events.length,
+        )
+      ];
     setGame((current) => {
       const g = base || current;
       const nextDayNumber = g.day + 1;
@@ -2788,6 +2834,83 @@ export default function Home() {
     setOpsTab("trade");
     setSelectedModifier("standard");
     beep(400);
+  }
+
+  function completeOnboarding() {
+    localStorage.setItem("micro-empire-onboarding-complete", "true");
+    setShowOnboarding(false);
+    setOnboardingStep(0);
+    beep(760);
+  }
+
+  function exportPlayerData() {
+    const backup = portableBackup({
+      game,
+      runHistory,
+      founderProfile,
+      atmosphere: {
+        sound,
+        ambience,
+        masterVolume,
+        reducedMotion,
+        highContrast,
+      },
+    });
+    navigator.clipboard?.writeText(backup);
+    setSaveStatus("Portable backup copied to clipboard");
+    beep(820);
+  }
+
+  function importPlayerData() {
+    const raw = window.prompt("Paste a Micro Empire V5.9 backup:");
+    if (!raw) return;
+    try {
+      const data = readPortableBackup<{
+        game: GameState;
+        runHistory: typeof runHistory;
+        founderProfile: FounderProfile;
+        atmosphere?: {
+          sound?: boolean;
+          ambience?: boolean;
+          masterVolume?: number;
+          reducedMotion?: boolean;
+          highContrast?: boolean;
+        };
+      }>(raw);
+      setGame({ ...initialState, ...data.game, phase: "home", customer: null });
+      setRunHistory(data.runHistory || []);
+      setFounderProfile({ ...EMPTY_PROFILE, ...(data.founderProfile || {}) });
+      if (data.atmosphere) {
+        setSound(data.atmosphere.sound ?? true);
+        setAmbience(data.atmosphere.ambience ?? true);
+        setMasterVolume(safeVolume(data.atmosphere.masterVolume ?? 0.65));
+        setReducedMotion(data.atmosphere.reducedMotion ?? false);
+        setHighContrast(data.atmosphere.highContrast ?? false);
+      }
+      setSaveStatus("Portable backup imported successfully");
+      setShowAtmosphere(false);
+    } catch {
+      setSaveStatus("Import failed: backup was not recognized");
+    }
+  }
+
+  function recoverPreviousSave() {
+    const recovered = loadSaveWithBackup<GameState>(
+      null,
+      localStorage.getItem(BACKUP_SAVE_KEY),
+    );
+    if (!recovered) {
+      setSaveStatus("No valid previous autosave is available");
+      return;
+    }
+    setGame({
+      ...initialState,
+      ...recovered.state,
+      phase: "home",
+      customer: null,
+    });
+    setSaveStatus("Previous autosave recovered");
+    setShowAtmosphere(false);
   }
 
   function prepareDailyChallenge() {
@@ -4171,10 +4294,10 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V5.8 · Audio &amp; Atmosphere</div>
+            <div className="ribbon">V5.9 · Launch Candidate</div>
             <p className="lede">
-              Experience Toronto through changing light, weather-aware
-              soundscapes and accessible atmosphere controls.
+              A refined, reliable founder simulation with guided onboarding,
+              resilient saves and deterministic Toronto challenges.
             </p>
             <button
               className="primary huge"
@@ -6598,6 +6721,34 @@ export default function Home() {
                 />
               </label>
             </div>
+            <div className="save-management">
+              <span>
+                <small>SAVE HEALTH</small>
+                <b>{saveStatus}</b>
+                <em>
+                  {lastSavedAt
+                    ? `Latest snapshot · ${lastSavedAt}`
+                    : "Waiting for first autosave"}
+                </em>
+              </span>
+              <div>
+                <button onClick={exportPlayerData}>Copy full backup</button>
+                <button onClick={importPlayerData}>Import backup</button>
+                <button onClick={recoverPreviousSave}>
+                  Recover previous save
+                </button>
+              </div>
+            </div>
+            <button
+              className="onboarding-reset"
+              onClick={() => {
+                setOnboardingStep(0);
+                setShowOnboarding(true);
+                setShowAtmosphere(false);
+              }}
+            >
+              Replay guided tour
+            </button>
             <p className="atmosphere-note">
               All sounds are generated in your browser. No audio files, tracking
               or downloads are used.
@@ -6607,6 +6758,124 @@ export default function Home() {
               onClick={() => setShowAtmosphere(false)}
             >
               Save atmosphere
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showOnboarding && (
+        <div
+          className="help-backdrop onboarding-backdrop"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Welcome to Micro Empire"
+        >
+          <div className="onboarding-card">
+            <div className="onboarding-progress">
+              {[0, 1, 2, 3].map((step) => (
+                <i
+                  key={step}
+                  className={step <= onboardingStep ? "active" : ""}
+                />
+              ))}
+            </div>
+            {onboardingStep === 0 && (
+              <>
+                <div className="onboarding-icon">⌂</div>
+                <p className="eyebrow">Welcome to Toronto</p>
+                <h2>Build small. Think like an empire.</h2>
+                <p>
+                  Micro Empire is a founder simulation about customers, cash,
+                  people and judgment—not just clicking for revenue.
+                </p>
+              </>
+            )}
+            {onboardingStep === 1 && (
+              <>
+                <div className="onboarding-icon">◷</div>
+                <p className="eyebrow">Your operating day</p>
+                <h2>Every hour is a tradeoff.</h2>
+                <p>
+                  Serve customers, interview the market, manage supply and
+                  protect founder energy. Close the day when the next action is
+                  no longer worth the risk.
+                </p>
+                <div className="onboarding-demo">
+                  <span>
+                    9 AM<small>Read conditions</small>
+                  </span>
+                  <b>→</b>
+                  <span>
+                    Operate<small>Choose actions</small>
+                  </span>
+                  <b>→</b>
+                  <span>
+                    5 PM<small>Review results</small>
+                  </span>
+                </div>
+              </>
+            )}
+            {onboardingStep === 2 && (
+              <>
+                <div className="onboarding-icon">◆</div>
+                <p className="eyebrow">What success means</p>
+                <h2>Balance more than cash.</h2>
+                <p>
+                  Reputation, product-market fit, relationships, ethics, health
+                  and team trust all shape the final founder score.
+                </p>
+                <div className="onboarding-metrics">
+                  <span>
+                    $<small>Runway</small>
+                  </span>
+                  <span>
+                    ★<small>Trust</small>
+                  </span>
+                  <span>
+                    ♥<small>People</small>
+                  </span>
+                  <span>
+                    ▲<small>Growth</small>
+                  </span>
+                </div>
+              </>
+            )}
+            {onboardingStep === 3 && (
+              <>
+                <div className="onboarding-icon">♛</div>
+                <p className="eyebrow">Your founder journey</p>
+                <h2>One run teaches the next.</h2>
+                <p>
+                  Complete daily goals and campaign missions, face Toronto
+                  crises, earn XP, collect badges and unlock harder founder
+                  trials.
+                </p>
+                <p className="onboarding-save-note">
+                  Your game autosaves locally and keeps a previous recovery
+                  snapshot.
+                </p>
+              </>
+            )}
+            <div className="onboarding-actions">
+              {onboardingStep > 0 && (
+                <button onClick={() => setOnboardingStep((step) => step - 1)}>
+                  Back
+                </button>
+              )}
+              <button
+                className="primary"
+                onClick={() =>
+                  onboardingStep === 3
+                    ? completeOnboarding()
+                    : setOnboardingStep((step) => step + 1)
+                }
+              >
+                {onboardingStep === 3 ? "Start building" : "Continue"}{" "}
+                <span>→</span>
+              </button>
+            </div>
+            <button className="onboarding-skip" onClick={completeOnboarding}>
+              Skip tour
             </button>
           </div>
         </div>
