@@ -3362,7 +3362,7 @@ export default function Home() {
     }
   }
   function shareScore() {
-    const text = `Micro Empire · ${game.scenarioName}\nScore ${score.toLocaleString()} · ${rating}\n${money(game.cash)} cash · ${game.reputation} reputation · ${game.served} customers\nhttps://learningsemantics.github.io/micro-empire-game/`;
+    const text = `Micro Empire · ${game.scenarioName}\nScore ${score.toLocaleString()} · ${rating}\n${money(game.cash)} cash · ${game.reputation} reputation · ${game.served} customers\nhttps://microempire.ca/`;
     navigator.clipboard?.writeText(text);
     setShareStatus("Scorecard copied");
   }
@@ -4691,7 +4691,8 @@ export default function Home() {
               <br />
               <span>EMPIRE</span>
             </h1>
-            <div className="ribbon">V6.4 · Stripe Test Billing</div>
+            <p className="studio-credit">A Learning Semantics Simulation</p>
+            <div className="ribbon">V6.4.1 · Endorsed Brand Release</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -7379,8 +7380,8 @@ export default function Home() {
             <button className="close" onClick={() => setShowCredits(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.0</p>
-            <h2>Complete Free Edition</h2>
+            <p className="eyebrow">Micro Empire V6.4.1</p>
+            <h2>A Learning Semantics Simulation</h2>
             <p className="credits-lede">
               A Toronto entrepreneurship simulation about building a company
               without losing sight of the people, city and founder behind it.
@@ -7409,7 +7410,7 @@ export default function Home() {
             </div>
             <div className="credits-list">
               <p>
-                <small>CREATED BY</small>
+                <small>DEVELOPER &amp; PUBLISHER</small>
                 <b>Learning Semantics</b>
               </p>
               <p>
@@ -7422,7 +7423,7 @@ export default function Home() {
               </p>
               <p>
                 <small>EDITION</small>
-                <b>V6.0 · July 2026</b>
+                <b>V6.4.1 · July 2026</b>
               </p>
             </div>
             <div className="privacy-note">
@@ -7697,7 +7698,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowCommercial(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.3</p>
+            <p className="eyebrow">Micro Empire V6.4.1</p>
             <h2>Free community. Licensed expansion.</h2>
             <p className="commercial-lede">
               The complete V6.0 game stays free. The Founder Licence will fund

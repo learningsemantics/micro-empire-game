@@ -1,7 +1,7 @@
 {
-  "name": "Micro Empire: Community Edition",
+  "name": "Micro Empire — A Learning Semantics Simulation",
   "short_name": "Micro Empire",
-  "description": "Build, operate and grow a neighbourhood business empire.",
+  "description": "Build a business, navigate Toronto, and learn entrepreneurship by doing.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

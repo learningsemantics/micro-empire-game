@@ -1,5 +1,9 @@
 # Micro Empire: The 7-Day Startup Challenge
 
+> **Micro Empire — A Learning Semantics Simulation**
+
+Developed and published by Learning Semantics. Micro Empire remains an independent product brand, with Learning Semantics serving as its endorsed developer and publisher.
+
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
 ## V6.4 Stripe Test Billing & Entitlements
