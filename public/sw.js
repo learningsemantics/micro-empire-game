@@ -1,4 +1,4 @@
-const CACHE = "micro-empire-v6-4-1";
+const CACHE = "micro-empire-v6-4-2";
 const CORE = ["./", "./manifest.webmanifest"];
 self.addEventListener("install", (event) =>
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(CORE))),
@@ -30,3 +30,4 @@ self.addEventListener("fetch", (event) => {
       ),
   );
 });
+

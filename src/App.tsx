@@ -4682,6 +4682,38 @@ export default function Home() {
         </button>
       </header>
 
+      <nav className="mobile-nav" aria-label="Mobile game navigation">
+        <button
+          onClick={() => setGame((current) => ({ ...current, phase: "home" }))}
+          aria-label="Home"
+        >
+          <i>⌂</i>
+          <span>Home</span>
+        </button>
+        <button
+          onClick={() => {
+            setAuthMode(authUser ? "profile" : "signin");
+            setShowAccount(true);
+          }}
+          aria-label={authUser ? "Founder account" : "Sign in"}
+        >
+          <i>●</i>
+          <span>{authUser ? "Account" : "Sign in"}</span>
+        </button>
+        <button onClick={() => setShowCommercial(true)} aria-label="Editions">
+          <i>♛</i>
+          <span>Licence</span>
+        </button>
+        <button onClick={() => setShowAtmosphere(true)} aria-label="Settings">
+          <i>⚙</i>
+          <span>Settings</span>
+        </button>
+        <button onClick={() => setShowHelp(true)} aria-label="How to play">
+          <i>?</i>
+          <span>Help</span>
+        </button>
+      </nav>
+
       {game.phase === "home" && (
         <section className="home-screen screen">
           <div className="hero-copy">
@@ -4692,7 +4724,7 @@ export default function Home() {
               <span>EMPIRE</span>
             </h1>
             <p className="studio-credit">A Learning Semantics Simulation</p>
-            <div className="ribbon">V6.4.1 · Endorsed Brand Release</div>
+            <div className="ribbon">V6.4.2 · Endorsed Brand Release</div>
             <p className="lede">
               The complete Toronto founder journey—from first customer to the
               legacy your choices leave behind.
@@ -7380,7 +7412,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowCredits(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.4.1</p>
+            <p className="eyebrow">Micro Empire V6.4.2</p>
             <h2>A Learning Semantics Simulation</h2>
             <p className="credits-lede">
               A Toronto entrepreneurship simulation about building a company
@@ -7423,7 +7455,7 @@ export default function Home() {
               </p>
               <p>
                 <small>EDITION</small>
-                <b>V6.4.1 · July 2026</b>
+                <b>V6.4.2 · July 2026</b>
               </p>
             </div>
             <div className="privacy-note">
@@ -7698,7 +7730,7 @@ export default function Home() {
             <button className="close" onClick={() => setShowCommercial(false)}>
               ×
             </button>
-            <p className="eyebrow">Micro Empire V6.4.1</p>
+            <p className="eyebrow">Micro Empire V6.4.2</p>
             <h2>Free community. Licensed expansion.</h2>
             <p className="commercial-lede">
               The complete V6.0 game stays free. The Founder Licence will fund

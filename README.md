@@ -4,6 +4,10 @@
 
 Developed and published by Learning Semantics. Micro Empire remains an independent product brand, with Learning Semantics serving as its endorsed developer and publisher.
 
+## V6.4.2 Mobile Experience Release
+
+V6.4.2 promotes mobile readiness to a release gate. It adds a five-action bottom navigation dock, safe-area support for modern phones, 44px minimum touch targets, iOS-safe form sizing, compact mobile game scenes, horizontally scrollable operation controls, phone-first modal sheets, improved small-screen typography, and dedicated landscape behavior. Desktop gameplay remains unchanged.
+
 A complete browser-based business strategy game. Choose a Coffee Cart, Career Studio, or AI Agency and build a profitable neighbourhood venture in seven in-game days.
 
 ## V6.4 Stripe Test Billing & Entitlements

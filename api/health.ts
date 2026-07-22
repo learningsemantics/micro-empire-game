@@ -3,9 +3,10 @@ export function GET() {
     {
       ok: true,
       service: "micro-empire-commercial",
-      version: "6.4.1",
+      version: "6.4.2",
       runtime: "vercel",
     },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
+
