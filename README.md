@@ -4,6 +4,10 @@
 
 Developed and published by Learning Semantics. Micro Empire remains an independent product brand, with Learning Semantics serving as its endorsed developer and publisher.
 
+## V6.4.4 Board-Game Cover Landing
+
+V6.4.4 brings the original Micro Empire board-game cover to the production landing screen. The optimized responsive artwork includes an accessible live start action, mobile-specific controls, saved-game continuation, and direct Free Edition and Founder Licence access.
+
 ## V6.4.3 Toronto in Depth
 
 V6.4.3 gives both Toronto scenes a lightweight 3D visual treatment without introducing a heavy rendering engine. The travel map now includes an isometric street grid, extruded city blocks, a dimensional skyline and CN Tower, atmospheric lighting, moving traffic, and layered Lake Ontario depth. The street-level business view adds building roof and side faces, richer materials, window reflections, and stronger environmental depth while preserving mobile performance and all existing interactions.

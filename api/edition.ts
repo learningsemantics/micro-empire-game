@@ -51,7 +51,7 @@ export async function GET(request: Request) {
           : "community",
       authenticated,
       source: "vercel",
-      version: "6.4.3",
+      version: "6.4.4",
       authRequiredForCommercial: true,
     },
     { headers: { "Cache-Control": "private, no-store" } },
