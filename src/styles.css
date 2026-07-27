@@ -286,6 +286,11 @@ button:focus-visible {
   height: min(70vh, 690px);
   min-height: 440px;
   align-self: end;
+  overflow: hidden;
+  border-radius: 22px 22px 0 0;
+  background:
+    radial-gradient(circle at 78% 18%, #ffe9a2 0 3%, transparent 14%),
+    linear-gradient(180deg, #9ccbd5 0 55%, #c8d3b0 55% 84%, transparent 84%);
   filter: drop-shadow(0 20px 20px #082f3566);
 }
 .home-screen > .neighbourhood {
@@ -305,10 +310,14 @@ button:focus-visible {
 }
 .skyline i {
   display: block;
-  background: #477d83;
+  background:
+    repeating-linear-gradient(90deg, #89bec3 0 5px, transparent 5px 11px),
+    linear-gradient(90deg, #477d83 0 75%, #315d63 75%);
   width: 11%;
   height: 50%;
   border: 4px solid #326b72;
+  box-shadow: 7px 8px 10px #173f4540;
+  transform: skewY(-2deg);
 }
 .skyline i:nth-child(2) {
   height: 80%;
@@ -351,11 +360,43 @@ button:focus-visible {
   position: absolute;
   bottom: 15%;
   border: 4px solid #17444a;
-  background: #a85d40;
-  box-shadow: 12px 13px 0 #0b3f45;
+  background:
+    linear-gradient(90deg, transparent 0 74%, #7c422f 74%),
+    #a85d40;
+  box-shadow: 15px 16px 17px #082f3566;
   width: 31%;
   height: 45%;
   transition: 0.25s;
+  transform: perspective(760px) rotateY(-3deg);
+  transform-origin: bottom;
+}
+.building:before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 4px;
+  right: -5px;
+  top: -18px;
+  height: 19px;
+  border: 4px solid #17444a;
+  border-bottom: 0;
+  background: #c78d61;
+  transform: skewX(-42deg);
+  transform-origin: bottom left;
+}
+.building:after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  top: 1px;
+  right: -17px;
+  bottom: -4px;
+  width: 17px;
+  border: 4px solid #17444a;
+  border-left: 0;
+  background: #704b3d;
+  transform: skewY(-45deg);
+  transform-origin: left top;
 }
 .building b {
   position: absolute;
@@ -372,12 +413,22 @@ button:focus-visible {
 .building.studio {
   left: 32%;
   height: 41%;
-  background: #d9b06c;
+  background:
+    linear-gradient(90deg, transparent 0 74%, #9d7749 74%),
+    #d9b06c;
+}
+.building.studio:before {
+  background: #f0d194;
 }
 .building.agency {
   right: 1%;
   height: 58%;
-  background: #31595d;
+  background:
+    linear-gradient(90deg, transparent 0 74%, #203f43 74%),
+    #31595d;
+}
+.building.agency:before {
+  background: #5b7e7f;
 }
 .building.agency > b {
   background: #725e9f;
@@ -438,9 +489,11 @@ button:focus-visible {
   left: -6%;
   right: -6%;
   height: 16%;
-  background: #37494a;
+  background:
+    linear-gradient(180deg, #293b3d, #46595a 52%, #26383a);
   border-top: 14px solid #aebf9e;
   color: white;
+  box-shadow: inset 0 12px 16px #17272955;
 }
 .street:after {
   content: "";
@@ -449,6 +502,7 @@ button:focus-visible {
   right: 0;
   top: 50%;
   border-top: 4px dashed #f5d470;
+  filter: drop-shadow(0 2px #16282a);
 }
 .bike {
   position: absolute;
@@ -2322,7 +2376,11 @@ button:focus-visible {
 .toronto-map {
   position: relative;
   height: 454px;
-  background: linear-gradient(150deg, #cbe4bd 0 74%, #5ca8c7 74%);
+  isolation: isolate;
+  perspective: 850px;
+  background:
+    radial-gradient(circle at 78% 18%, #fff8d5 0 2%, transparent 12%),
+    linear-gradient(180deg, #94c8d8 0 23%, #b9d5c0 23% 76%, #4b91ad 76%);
   overflow: hidden;
   transition: 0.5s;
 }
@@ -2331,10 +2389,13 @@ button:focus-visible {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(25deg, transparent 47%, #f4e8cb 48% 51%, transparent 52%),
-    linear-gradient(155deg, transparent 45%, #f4e8cb 46% 49%, transparent 50%);
-  background-size: 95px 78px;
-  opacity: 0.75;
+    linear-gradient(27deg, transparent 47%, #d4d0bd 48% 51%, transparent 52%),
+    linear-gradient(153deg, transparent 45%, #e6dfc8 46% 49%, transparent 50%);
+  background-size: 108px 82px;
+  opacity: 0.82;
+  transform: perspective(700px) rotateX(48deg) scale(1.32);
+  transform-origin: center 62%;
+  z-index: 1;
 }
 .toronto-map.hour-16,
 .toronto-map.hour-17 {
@@ -2343,17 +2404,162 @@ button:focus-visible {
 .city-roads {
   position: absolute;
   inset: 0;
-  background: linear-gradient(
-    90deg,
-    transparent 48%,
-    #fff8dc 49% 51%,
-    transparent 52%
-  );
-  background-size: 180px 100%;
-  opacity: 0.6;
+  z-index: 2;
+  background:
+    linear-gradient(90deg, transparent 48%, #777d7a 48% 52%, transparent 52%),
+    linear-gradient(27deg, transparent 48%, #747a77 48% 52%, transparent 52%);
+  background-size: 180px 100%, 220px 118px;
+  opacity: 0.8;
+  filter: drop-shadow(0 2px 0 #ffffff5c);
+}
+.city-horizon {
+  position: absolute;
+  z-index: 0;
+  top: 7%;
+  left: 0;
+  width: 100%;
+  height: 29%;
+  border-bottom: 5px solid #647f78;
+  background: linear-gradient(180deg, transparent, #d5e0d0 92%);
+  pointer-events: none;
+}
+.city-horizon i {
+  position: absolute;
+  bottom: 0;
+  width: 7%;
+  height: 38%;
+  border-radius: 2px 2px 0 0;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 7px, #b9d6d5 7px 9px),
+    linear-gradient(90deg, #567271, #78928b);
+  box-shadow: inset -7px 0 #405f60, 7px 5px 12px #315d6045;
+}
+.city-horizon i:nth-child(1) { left: 7%; height: 43%; }
+.city-horizon i:nth-child(2) { left: 17%; width: 10%; height: 64%; }
+.city-horizon i:nth-child(3) { left: 30%; height: 52%; }
+.city-horizon i:nth-child(4) { right: 28%; width: 9%; height: 72%; }
+.city-horizon i:nth-child(5) { right: 15%; height: 48%; }
+.city-horizon i:nth-child(6) { right: 5%; width: 8%; height: 58%; }
+.city-horizon b {
+  position: absolute;
+  left: 64%;
+  bottom: 0;
+  width: 5px;
+  height: 91%;
+  border-radius: 4px 4px 0 0;
+  background: #455e61;
+  box-shadow: 0 0 0 1px #d7e6df;
+}
+.city-horizon b:before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 38%;
+  width: 30px;
+  height: 30px;
+  border: 5px solid #455e61;
+  border-radius: 50%;
+  background: #b9d4cf;
+  transform: translate(-50%, -50%);
+  box-shadow: 0 8px 0 -5px #455e61;
+}
+.city-blocks {
+  position: absolute;
+  z-index: 2;
+  inset: 25% 3% 15%;
+  pointer-events: none;
+}
+.city-blocks > i {
+  --block: #d59c67;
+  position: absolute;
+  width: 34px;
+  height: 24px;
+  border-radius: 2px 2px 1px 1px;
+  background:
+    repeating-linear-gradient(90deg, transparent 0 8px, #f4d49f 8px 11px),
+    var(--block);
+  box-shadow:
+    inset -8px 0 #9c634b,
+    inset 0 -6px #b77b55,
+    9px 12px 11px #334c4345;
+  transform: skewY(-7deg);
+}
+.city-blocks > i:before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: -7px;
+  height: 9px;
+  background: #ead3ae;
+  transform: skewX(-42deg);
+  transform-origin: bottom;
+}
+.city-blocks > i b {
+  position: absolute;
+  left: 7px;
+  bottom: 0;
+  width: 7px;
+  height: 9px;
+  background: #315d60;
+}
+.city-blocks > i:nth-child(3n) { --block: #7da9a2; height: 36px; }
+.city-blocks > i:nth-child(4n) { --block: #bd7d70; width: 46px; }
+.city-blocks > i:nth-child(5n) { --block: #d8bd83; height: 45px; }
+.city-blocks > i:nth-child(1) { left: 4%; top: 12%; }
+.city-blocks > i:nth-child(2) { left: 19%; top: 4%; }
+.city-blocks > i:nth-child(3) { left: 33%; top: 15%; }
+.city-blocks > i:nth-child(4) { left: 48%; top: 2%; }
+.city-blocks > i:nth-child(5) { left: 64%; top: 14%; }
+.city-blocks > i:nth-child(6) { left: 81%; top: 3%; }
+.city-blocks > i:nth-child(7) { left: 9%; top: 37%; }
+.city-blocks > i:nth-child(8) { left: 26%; top: 45%; }
+.city-blocks > i:nth-child(9) { left: 43%; top: 34%; }
+.city-blocks > i:nth-child(10) { left: 58%; top: 47%; }
+.city-blocks > i:nth-child(11) { left: 74%; top: 35%; }
+.city-blocks > i:nth-child(12) { left: 89%; top: 45%; }
+.city-blocks > i:nth-child(13) { left: 2%; top: 72%; }
+.city-blocks > i:nth-child(14) { left: 18%; top: 76%; }
+.city-blocks > i:nth-child(15) { left: 39%; top: 69%; }
+.city-blocks > i:nth-child(16) { left: 56%; top: 78%; }
+.city-blocks > i:nth-child(17) { left: 72%; top: 66%; }
+.city-blocks > i:nth-child(18) { left: 87%; top: 75%; }
+.city-traffic {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+}
+.city-traffic i {
+  position: absolute;
+  width: 14px;
+  height: 7px;
+  border-radius: 4px 4px 2px 2px;
+  background: #f0b946;
+  box-shadow: inset -4px 0 #bd6f2d, 3px 4px 6px #203f3d55;
+  animation: city-drive 10s linear infinite;
+}
+.city-traffic i:before,
+.city-traffic i:after {
+  content: "";
+  position: absolute;
+  bottom: -2px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #26383a;
+}
+.city-traffic i:before { left: 2px; }
+.city-traffic i:after { right: 2px; }
+.city-traffic i:nth-child(1) { left: -5%; top: 47%; }
+.city-traffic i:nth-child(2) { left: -10%; top: 69%; animation-delay: -4s; background: #ec6b51; }
+.city-traffic i:nth-child(3) { left: -18%; top: 36%; animation-delay: -7s; background: #f3eee0; }
+@keyframes city-drive {
+  to { transform: translateX(115vw) translateY(28px); }
 }
 .ttc-line {
   position: absolute;
+  z-index: 3;
   left: 9%;
   right: 20%;
   top: 57%;
@@ -2373,6 +2579,7 @@ button:focus-visible {
 }
 .lake-label {
   position: absolute;
+  z-index: 3;
   right: 3%;
   bottom: 4%;
   color: #e8ffff;
@@ -2387,7 +2594,7 @@ button:focus-visible {
   top: 65%;
   font-size: 42px;
   color: #315d60;
-  z-index: 2;
+  z-index: 3;
 }
 .cn-map small {
   display: block;
@@ -2395,7 +2602,7 @@ button:focus-visible {
 }
 .city-place {
   position: absolute;
-  z-index: 4;
+  z-index: 5;
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
@@ -2453,7 +2660,7 @@ button:focus-visible {
 }
 .founder-marker {
   position: absolute;
-  z-index: 6;
+  z-index: 7;
   transform: translate(-50%, 20px);
   color: #f0b946;
   text-shadow: 0 2px 0 #173f45;

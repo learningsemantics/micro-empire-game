@@ -4,6 +4,10 @@
 
 Developed and published by Learning Semantics. Micro Empire remains an independent product brand, with Learning Semantics serving as its endorsed developer and publisher.
 
+## V6.4.3 Toronto in Depth
+
+V6.4.3 gives both Toronto scenes a lightweight 3D visual treatment without introducing a heavy rendering engine. The travel map now includes an isometric street grid, extruded city blocks, a dimensional skyline and CN Tower, atmospheric lighting, moving traffic, and layered Lake Ontario depth. The street-level business view adds building roof and side faces, richer materials, window reflections, and stronger environmental depth while preserving mobile performance and all existing interactions.
+
 ## V6.4.2 Mobile Experience Release
 
 V6.4.2 promotes mobile readiness to a release gate. It adds a five-action bottom navigation dock, safe-area support for modern phones, 44px minimum touch targets, iOS-safe form sizing, compact mobile game scenes, horizontally scrollable operation controls, phone-first modal sheets, improved small-screen typography, and dedicated landscape behavior. Desktop gameplay remains unchanged.
