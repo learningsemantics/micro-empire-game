@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 66909)
-Total output lines: 8030
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -3380,7 +3377,1991 @@ export default function Home() {
       interviews: g.interviews + 1,
       insights: g.insights + 1,
       pmf: clamp(g.pmf + 2 + g.skills.discovery, 0, 100),
-      message: `Interview insight #${g.insights + 1}: ${DISTRICTS[g.district].segments[g.insights % 3]} customers value ${g.offer === 2 ? "proof and premium outcomes" : g.price > 1 ? "clear v…16909 tokens truncated…et—learn who responds.</small>
+      message: `Interview insight #${g.insights + 1}: ${DISTRICTS[g.district].segments[g.insights % 3]} customers value ${g.offer === 2 ? "proof and premium outcomes" : g.price > 1 ? "clear value justification" : "convenience and trust"}. PMF +${2 + g.skills.discovery}.`,
+    }));
+    beep(610);
+  }
+
+  function startExperiment(type: ExperimentKey) {
+    if (game.experiment || game.cash < 100) return;
+    setGame((g) => ({
+      ...g,
+      cash: g.cash - 100,
+      expenses: g.expenses + 100,
+      dailyExpenses: g.dailyExpenses + 100,
+      experiment: { type, progress: 0, target: 5 },
+      message: `${type === "price" ? "Pricing" : type === "segment" ? "Customer segment" : "Offer positioning"} experiment started. Serve five customers to collect evidence.`,
+    }));
+    beep(740);
+  }
+
+  function adjustPrice(delta: number) {
+    setGame((g) => ({
+      ...g,
+      price: clamp(Math.round((g.price + delta) * 10) / 10, 0.7, 1.5),
+      message: "Pricing updated. Watch how each customer segment responds.",
+    }));
+    beep(540);
+  }
+
+  function hireStaff() {
+    if (!game.business || game.cash < 150 || game.staff.length >= 3) return;
+    const role = STAFF_ROLES[game.business][game.staff.length];
+    const name = PEOPLE[(game.staff.length + game.day * 2) % PEOPLE.length];
+    const member: StaffMember = {
+      id: Date.now(),
+      name,
+      role,
+      skill: 1,
+      morale: 82,
+      salary: 55 + game.staff.length * 15,
+      tenure: 0,
+      loyalty: 72,
+    };
+    setGame((g) => ({
+      ...g,
+      cash: g.cash - 150,
+      expenses: g.expenses + 150,
+      dailyExpenses: g.dailyExpenses + 150,
+      staff: [...g.staff, member],
+      maxCapacity: g.maxCapacity + 2,
+      capacity: g.capacity + 2,
+      message: `${name} joined as ${role}. Daily payroll is now ${money(g.staff.reduce((s, m) => s + m.salary, 0) + member.salary)}.`,
+    }));
+    beep(720);
+  }
+
+  function trainStaff(id: number) {
+    if (game.cash < 110) return;
+    setGame((g) => ({
+      ...g,
+      cash: g.cash - 110,
+      expenses: g.expenses + 110,
+      dailyExpenses: g.dailyExpenses + 110,
+      staff: g.staff.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              skill: Math.min(5, m.skill + 1),
+              morale: clamp(m.morale + 7, 20, 100),
+            }
+          : m,
+      ),
+      message: "Training completed. Service quality and morale improved.",
+    }));
+    beep(810);
+  }
+
+  function restFounder() {
+    advance((g) => ({
+      ...g,
+      energy: clamp(g.energy + 35, 0, 100),
+      stress: clamp(g.stress - 24, 0, 100),
+      focus: clamp(g.focus + 18, 0, 100),
+      message:
+        "You protected an hour for recovery. Energy and judgment improved.",
+    }));
+    beep(430);
+  }
+  function travelTo(destination: CityKey) {
+    if (destination === game.founderLocation) return;
+    const mode = TRANSPORT[game.transport];
+    const disruption =
+      game.transport === "ttc" && game.ttcStatus !== "Good service" ? 3 : 0;
+    const fare = game.transport === "ttc" && game.transitPass ? 0 : mode.fare;
+    const weatherCost =
+      game.transport === "walk" || game.transport === "bike"
+        ? WEATHER[game.weather].travel
+        : 0;
+    advance((g) => ({
+      ...g,
+      personalCash: g.personalCash - fare,
+      founderLocation: destination,
+      placesVisited: g.placesVisited.includes(destination)
+        ? g.placesVisited
+        : [...g.placesVisited, destination],
+      energy: clamp(g.energy - mode.energy - disruption - weatherCost, 0, 100),
+      stress: clamp(g.stress + disruption, 0, 100),
+      health: clamp(
+        g.health +
+          (g.transport === "walk" && g.weather === "clear"
+            ? 2
+            : g.transport === "bike" && g.weather === "clear"
+              ? 1
+              : weatherCost
+                ? -1
+                : 0),
+        0,
+        100,
+      ),
+      message: `You travelled by ${mode.name.toLowerCase()} to ${CITY[destination].name}. ${game.transport === "ttc" ? game.ttcStatus + ". " : ""}${WEATHER[g.weather].name} conditions shaped the trip.`,
+    }));
+    beep(510);
+  }
+  function cityAction() {
+    const key = game.founderLocation;
+    if (key === game.homeLocation) {
+      restFounder();
+      return;
+    }
+    if (key === (game.district as CityKey)) {
+      setWorldView("business");
+      setGame((g) => ({
+        ...g,
+        message: `You arrived at ${BUSINESSES[g.business!].name}. The operating floor is ready.`,
+      }));
+      return;
+    }
+    if (key === "mars" && game.personalCash >= 80)
+      advance((g) => ({
+        ...g,
+        personalCash: g.personalCash - 80,
+        network: clamp(g.network + 8, 0, 100),
+        skillPoints: g.skillPoints + 1,
+        message:
+          "A MaRS workshop added one skill point and expanded your founder network.",
+      }));
+    if (key === "cityhall" && game.cash >= 100)
+      advance((g) => ({
+        ...g,
+        cash: g.cash - 100,
+        expenses: g.expenses + 100,
+        dailyExpenses: g.dailyExpenses + 100,
+        permitLevel: Math.min(3, g.permitLevel + 1),
+        reputation: clamp(g.reputation + 4, 0, 100),
+        message:
+          "Your city permit level increased. Compliance builds neighbourhood trust.",
+      }));
+    if (key === "kensington")
+      advance((g) => ({
+        ...g,
+        network: clamp(g.network + 12, 0, 100),
+        referrals: g.referrals + 2,
+        stress: clamp(g.stress - 5, 0, 100),
+        message:
+          "A Kensington founder meetup produced two referrals and stronger connections.",
+      }));
+    if (key === "financial") {
+      if (game.funding === "bootstrapped") chooseFunding("debt");
+      else
+        advance((g) => ({
+          ...g,
+          focus: clamp(g.focus + 12, 0, 100),
+          message:
+            "A banker reviewed your runway and sharpened your financing plan.",
+        }));
+    }
+    if (key === "yorkville") {
+      if (game.funding === "bootstrapped") chooseFunding("angel");
+      else
+        advance((g) => ({
+          ...g,
+          network: clamp(g.network + 10, 0, 100),
+          reputation: clamp(g.reputation + 3, 0, 100),
+          message:
+            "An investor gathering strengthened your network and visibility.",
+        }));
+    }
+    if (key === "harbour")
+      advance((g) => ({
+        ...g,
+        interviews: g.interviews + 2,
+        insights: g.insights + 2,
+        pmf: clamp(g.pmf + 3 + g.skills.discovery, 0, 100),
+        message:
+          "Waterfront observation generated two customer interviews and a new demand signal.",
+      }));
+    if (key === "liberty")
+      advance((g) => ({
+        ...g,
+        network: clamp(g.network + 8, 0, 100),
+        pmf: clamp(g.pmf + 2, 0, 100),
+        message:
+          "A Liberty Village operator introduced you to the local B2B community.",
+      }));
+    beep(690);
+  }
+  function buyTransitPass() {
+    if (game.transitPass || game.personalCash < BALANCE.transitPass) return;
+    setGame((g) => ({
+      ...g,
+      personalCash: g.personalCash - BALANCE.transitPass,
+      transitPass: true,
+      message: "TTC founder pass activated. TTC travel is now fare-free.",
+    }));
+    beep(620);
+  }
+  function upgradeHousing() {
+    if (game.housingTier === "studio" || game.personalCash < 800) return;
+    setGame((g) => ({
+      ...g,
+      personalCash: g.personalCash - 800,
+      housingTier: "studio",
+      energy: clamp(g.energy + 20, 0, 100),
+      message:
+        "You moved into a studio. Higher daily housing cost buys stronger recovery.",
+    }));
+    beep(740);
+  }
+  function chooseJob(key: JobKey) {
+    if (game.educationCredits < JOBS[key].requirement) return;
+    setGame((g) => ({
+      ...g,
+      job: key,
+      message:
+        key === "none"
+          ? "You committed fully to the venture. Personal runway now matters more."
+          : `${JOBS[key].name} added as your income safety net.`,
+    }));
+    beep(580);
+  }
+  function workShift() {
+    const job = JOBS[game.job];
+    if (game.job === "none" || game.energy < job.energy) return;
+    advance((g) => ({
+      ...g,
+      personalCash: g.personalCash + job.pay,
+      energy: clamp(g.energy - job.energy, 0, 100),
+      stress: clamp(g.stress + 5, 0, 100),
+      health: clamp(g.health - (g.energy < 35 ? 3 : 0), 0, 100),
+      shiftsWorked: g.shiftsWorked + 1,
+      message: `${job.name} completed. ${money(job.pay)} added to personal cash, but the shift consumed founder energy.`,
+    }));
+    beep(640);
+  }
+  function study() {
+    if (game.personalCash < BALANCE.founderCourse) return;
+    advance((g) => ({
+      ...g,
+      personalCash: g.personalCash - BALANCE.founderCourse,
+      educationCredits: g.educationCredits + 1,
+      skillPoints: g.skillPoints + 1,
+      focus: clamp(g.focus + 10, 0, 100),
+      message:
+        "You completed a practical founder course. +1 education credit and +1 skill point.",
+    }));
+    beep(820);
+  }
+  function usePersonalCredit() {
+    if (game.creditScore < 600 || game.personalDebt > 0) return;
+    setGame((g) => ({
+      ...g,
+      personalCash: g.personalCash + BALANCE.personalCreditAdvance,
+      personalDebt: BALANCE.personalCreditRepayment,
+      creditScore: clamp(g.creditScore - 10, 300, 850),
+      message:
+        "A $500 personal credit advance created a $575 repayment obligation.",
+    }));
+    beep(520);
+  }
+  function repayPersonalDebt() {
+    const payment = Math.min(200, game.personalDebt, game.personalCash);
+    if (payment <= 0) return;
+    setGame((g) => ({
+      ...g,
+      personalCash: g.personalCash - payment,
+      personalDebt: g.personalDebt - payment,
+      creditScore: clamp(g.creditScore + 8, 300, 850),
+      message: `You repaid ${money(payment)} of personal debt. Credit resilience improved.`,
+    }));
+    beep(720);
+  }
+  function buyBike() {
+    if (game.ownsBike || game.personalCash < BALANCE.bikePrice) return;
+    setGame((g) => ({
+      ...g,
+      personalCash: g.personalCash - BALANCE.bikePrice,
+      ownsBike: true,
+      transport: "bike",
+      health: clamp(g.health + 3, 0, 100),
+      message:
+        "You bought a city bike. Travel is now free and lightly restorative.",
+    }));
+    beep(680);
+  }
+  function chooseTransport(key: TransportKey) {
+    if (key === "bike" && !game.ownsBike) return;
+    setGame((g) => ({
+      ...g,
+      transport: key,
+      message: `${TRANSPORT[key].name} selected for city travel. ${TRANSPORT[key].note}.`,
+    }));
+  }
+  function buyBranchPermit() {
+    const cost = 350 + game.branchPermits * 150;
+    if (game.cash < cost) return;
+    setGame((g) => ({
+      ...g,
+      cash: g.cash - cost,
+      expenses: g.expenses + cost,
+      dailyExpenses: g.dailyExpenses + cost,
+      branchPermits: g.branchPermits + 1,
+      permitLevel: Math.min(3, g.permitLevel + 1),
+      message: `Expansion permit ${g.branchPermits + 1} approved for ${money(cost)}.`,
+    }));
+    beep(700);
+  }
+  function openBranch(business: BusinessKey) {
+    const city = game.founderLocation;
+    if (
+      game.branches.some((b) => b.city === city) ||
+      game.branches.length >= game.branchPermits
+    )
+      return;
+    const max = business === "coffee" ? 8 : business === "career" ? 6 : 4;
+    const baseCost = PROPERTY_COST[city] + BUSINESSES[business].cost;
+    const cost = Math.round(
+      baseCost * (game.archetype === "portfolio" ? 0.9 : 1),
+    );
+    if (game.cash < cost) return;
+    const branch: Branch = {
+      id: Date.now(),
+      name: `${CITY[city].name} ${BUSINESSES[business].name}`,
+      city,
+      business,
+      level: 1,
+      inventory: max,
+      maxInventory: max,
+      manager: null,
+      lifetimeRevenue: 0,
+      propertyValue: PROPERTY_COST[city],
+    };
+    setGame((g) => ({
+      ...g,
+      cash: g.cash - cost,
+      expenses: g.expenses + cost,
+      dailyExpenses: g.dailyExpenses + cost,
+      branches: [...g.branches, branch],
+      reputation: clamp(g.reputation + 5, 0, 100),
+      message: `${branch.name} acquired for ${money(cost)}. It begins passive operations at daily close.`,
+    }));
+    beep(880);
+  }
+  function restockBranch(id: number) {
+    setGame((g) => {
+      const branch = g.branches.find((b) => b.id === id);
+      if (!branch) return g;
+      const missing = branch.maxInventory - branch.inventory,
+        cost =
+          missing *
+          (branch.business === "coffee"
+            ? 12
+            : branch.business === "career"
+              ? 24
+              : 45);
+      if (!missing || g.cash < cost) return g;
+      return {
+        ...g,
+        cash: g.cash - cost,
+        expenses: g.expenses + cost,
+        dailyExpenses: g.dailyExpenses + cost,
+        branches: g.branches.map((b) =>
+          b.id === id ? { ...b, inventory: b.maxInventory } : b,
+        ),
+        message: `${branch.name} restocked for ${money(cost)}.`,
+      };
+    });
+    beep(520);
+  }
+  function upgradeBranch(id: number) {
+    setGame((g) => {
+      const branch = g.branches.find((b) => b.id === id);
+      if (!branch) return g;
+      const cost = 500 + branch.level * 350;
+      if (branch.level >= 3 || g.cash < cost) return g;
+      return {
+        ...g,
+        cash: g.cash - cost,
+        expenses: g.expenses + cost,
+        dailyExpenses: g.dailyExpenses + cost,
+        branches: g.branches.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                level: b.level + 1,
+                maxInventory: b.maxInventory + 3,
+                inventory: b.inventory + 3,
+                propertyValue: b.propertyValue + Math.round(cost * 0.7),
+              }
+            : b,
+        ),
+        message: `${branch.name} upgraded to level ${branch.level + 1}.`,
+      };
+    });
+    beep(840);
+  }
+  function assignManager(id: number) {
+    setGame((g) => {
+      const used = new Set(g.branches.map((b) => b.manager).filter(Boolean));
+      const available = g.staff.find((s) => !used.has(s.name));
+      if (!available)
+        return {
+          ...g,
+          message: "Hire another specialist before assigning a branch manager.",
+        };
+      return {
+        ...g,
+        branches: g.branches.map((b) =>
+          b.id === id ? { ...b, manager: available.name } : b,
+        ),
+        message: `${available.name} now manages this branch, increasing daily throughput.`,
+      };
+    });
+    beep(760);
+  }
+  function sellBranch(id: number) {
+    setGame((g) => {
+      const branch = g.branches.find((b) => b.id === id);
+      if (!branch || g.branches[0]?.id === id) return g;
+      const value = Math.round(branch.propertyValue * 0.85);
+      return {
+        ...g,
+        cash: g.cash + value,
+        branches: g.branches.filter((b) => b.id !== id),
+        message: `${branch.name} sold for ${money(value)}.`,
+      };
+    });
+    beep(460);
+  }
+  function meetResident(id: string) {
+    advance((g) => ({
+      ...g,
+      residents: g.residents.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              relationship: clamp(r.relationship + 7, -50, 100),
+              encounters: r.encounters + 1,
+              mood: "Enjoyed your conversation",
+            }
+          : r,
+      ),
+      socialCapital: clamp(g.socialCapital + 3, 0, 100),
+      network: clamp(g.network + 2, 0, 100),
+      stress: clamp(g.stress - 3, 0, 100),
+      message: `A genuine conversation strengthened this relationship and your social capital.`,
+    }));
+    beep(610);
+  }
+  function askReferral(id: string) {
+    const resident = game.residents.find((r) => r.id === id);
+    if (!resident || resident.relationship < 20) return;
+    advance((g) => ({
+      ...g,
+      residents: g.residents.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              relationship: clamp(r.relationship + 2, -50, 100),
+              mood: "Actively recommending your business",
+            }
+          : r,
+      ),
+      referrals: g.referrals + 2,
+      socialCapital: clamp(g.socialCapital + 2, 0, 100),
+      message: `${resident.name} introduced two people from their network.`,
+    }));
+    beep(720);
+  }
+  function collaborate(id: string) {
+    const resident = game.residents.find((r) => r.id === id);
+    if (!resident || resident.relationship < 45 || game.cash < 100) return;
+    advance((g) => ({
+      ...g,
+      cash: g.cash + 350,
+      expenses: g.expenses + 100,
+      dailyExpenses: g.dailyExpenses + 100,
+      revenue: g.revenue + 450,
+      dailyRevenue: g.dailyRevenue + 450,
+      collaborations: g.collaborations + 1,
+      residents: g.residents.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              relationship: clamp(r.relationship + 5, -50, 100),
+              loyalty: clamp(r.loyalty + 5, 0, 100),
+              mood: "Building something with you",
+            }
+          : r,
+      ),
+      message: `A collaboration with ${resident.name} produced ${money(450)} revenue on a ${money(100)} activation.`,
+    }));
+    beep(880);
+  }
+  function respondToCity(kind: "grant" | "activate" | "resilience") {
+    if (game.lastCityActionDay === game.day) return;
+    if (
+      kind === "grant" &&
+      (game.cityPolicy !== "smallbiz" || game.permitLevel < 1)
+    )
+      return;
+    if (kind !== "grant" && game.cash < (kind === "activate" ? 150 : 120))
+      return;
+    advance((g) =>
+      kind === "grant"
+        ? {
+            ...g,
+            cash: g.cash + 650,
+            cityActions: g.cityActions + 1,
+            lastCityActionDay: g.day,
+            message:
+              "Your permitted business secured $650 through the Main Street Grant.",
+          }
+        : kind === "activate"
+          ? {
+              ...g,
+              cash: g.cash - 150,
+              expenses: g.expenses + 150,
+              dailyExpenses: g.dailyExpenses + 150,
+              reputation: clamp(g.reputation + 8, 0, 100),
+              socialCapital: clamp(g.socialCapital + 5, 0, 100),
+              cityActions: g.cityActions + 1,
+              lastCityActionDay: g.day,
+              message: `A neighbourhood activation turned ${g.cityEvent} into reputation and social capital.`,
+            }
+          : {
+              ...g,
+              cash: g.cash - 120,
+              expenses: g.expenses + 120,
+              dailyExpenses: g.dailyExpenses + 120,
+              supplier: "local",
+              capacity: g.maxCapacity,
+              stress: clamp(g.stress - 5, 0, 100),
+              cityActions: g.cityActions + 1,
+              lastCityActionDay: g.day,
+              message:
+                "A resilience plan stabilized supply and reduced disruption stress.",
+            },
+    );
+    beep(790);
+  }
+  function partnerRival(id: string) {
+    if (game.lastRivalActionDay === game.day || game.cash < 150) return;
+    const rival = game.rivals.find((r) => r.id === id);
+    if (!rival) return;
+    advance((g) => {
+      const crosses = rival.relationship < 35 && rival.relationship + 12 >= 35;
+      return {
+        ...g,
+        cash: g.cash - 150,
+        expenses: g.expenses + 150,
+        dailyExpenses: g.dailyExpenses + 150,
+        rivals: g.rivals.map((r) =>
+          r.id === id
+            ? {
+                ...r,
+                relationship: clamp(r.relationship + 12, -50, 100),
+                score: r.score + 80,
+              }
+            : r,
+        ),
+        alliances: g.alliances + (crosses ? 1 : 0),
+        network: clamp(g.network + 6, 0, 100),
+        lastRivalActionDay: g.day,
+        message: `A joint activation with ${rival.name} strengthened both companies${crosses ? " and formed a formal alliance" : ""}.`,
+      };
+    });
+    beep(750);
+  }
+  function challengeRival(id: string) {
+    if (game.lastRivalActionDay === game.day) return;
+    const rival = game.rivals.find((r) => r.id === id);
+    if (!rival) return;
+    const win = calculateFounderScore(game) + game.focus * 10 >= rival.score;
+    advance((g) => ({
+      ...g,
+      rivals: g.rivals.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              relationship: clamp(r.relationship - 10, -50, 100),
+              momentum: clamp(r.momentum + (win ? -1 : 1), 1, 7),
+            }
+          : r,
+      ),
+      reputation: clamp(g.reputation + (win ? 7 : -3), 0, 100),
+      stress: clamp(g.stress + (win ? 3 : 9), 0, 100),
+      leaguePoints: g.leaguePoints + (win ? 15 : 0),
+      rivalWins: g.rivalWins + (win ? 1 : 0),
+      lastRivalActionDay: g.day,
+      message: win
+        ? `You outperformed ${rival.name} in a public founder challenge. +15 league points.`
+        : `${rival.name} won this round. Improve the fundamentals before a rematch.`,
+    }));
+    beep(win ? 900 : 360);
+  }
+  function exportLeague() {
+    const code = btoa(
+      JSON.stringify({
+        v: 5,
+        seed: game.seed,
+        difficulty: game.difficulty,
+        season: game.seasonName,
+        heat: game.neighbourhoodHeat,
+        rivals: game.rivals.map((r) => ({
+          id: r.id,
+          score: r.score,
+          momentum: r.momentum,
+        })),
+      }),
+    );
+    navigator.clipboard?.writeText(code);
+    setShareStatus("League challenge code copied");
+    window.setTimeout(() => setShareStatus(""), 1800);
+  }
+  function importLeague() {
+    const code = window.prompt("Paste a Toronto Founder League code");
+    if (!code) return;
+    try {
+      const data = JSON.parse(atob(code.trim()));
+      if (data.v !== 5) throw new Error();
+      setGame((g) => ({
+        ...g,
+        seed: Number(data.seed) || g.seed,
+        difficulty: data.difficulty || g.difficulty,
+        seasonName: data.season || "Community League",
+        neighbourhoodHeat: { ...g.neighbourhoodHeat, ...data.heat },
+        rivals: g.rivals.map((r) => {
+          const shared = data.rivals?.find(
+            (x: { id: string }) => x.id === r.id,
+          );
+          return shared
+            ? {
+                ...r,
+                score: Number(shared.score) || r.score,
+                momentum: Number(shared.momentum) || r.momentum,
+              }
+            : r;
+        }),
+        leagueCodeImported: true,
+        message:
+          "Community league imported. Everyone now plays the same Toronto conditions.",
+      }));
+      setShareStatus("Community league imported");
+    } catch {
+      setShareStatus("Invalid V5 league code");
+    }
+  }
+  function chooseArchetype(key: ArchetypeKey) {
+    if (key === "undecided" || game.archetype !== "undecided") return;
+    setGame((g) => ({
+      ...g,
+      archetype: key,
+      skillPoints: g.skillPoints + 1,
+      storyInbox: [
+        {
+          day: g.day,
+          from: "Founder Journal",
+          text: `You named your path: ${ARCHETYPES[key].name}. Future decisions will reinforce or challenge it.`,
+          tone: "mentor",
+        },
+        ...g.storyInbox,
+      ],
+      message: `${ARCHETYPES[key].name} selected. Its strengths now shape the simulation.`,
+    }));
+    beep(860);
+  }
+  function claimMission(id: string) {
+    const mission = CAMPAIGN_MISSIONS.find((item) => item.id === id);
+    if (
+      !mission ||
+      game.claimedMissionIds.includes(id) ||
+      !chapterUnlocked(mission.chapter, game.claimedMissionIds) ||
+      missionProgress(mission, missionSnapshot) < mission.target
+    )
+      return;
+    setGame((g) => ({
+      ...g,
+      cash: g.cash + mission.rewardCash,
+      revenue: g.revenue + mission.rewardCash,
+      campaignXp: g.campaignXp + mission.rewardXp,
+      missionStreak: g.missionStreak + 1,
+      claimedMissionIds: [...g.claimedMissionIds, id],
+      skillPoints:
+        g.skillPoints + ((g.claimedMissionIds.length + 1) % 2 === 0 ? 1 : 0),
+      leaguePoints: g.leaguePoints + 5,
+      storyInbox: [
+        {
+          day: g.day,
+          from: "Campaign Desk",
+          text: `${mission.title} complete. The next chapter of your Toronto founder campaign is taking shape.`,
+          tone: "warm",
+        },
+        ...g.storyInbox,
+      ],
+      message: `Mission complete: ${mission.title}. +${money(mission.rewardCash)} and ${mission.rewardXp} campaign XP.`,
+    }));
+    setCelebration(`Mission complete · ${mission.title}`);
+    window.setTimeout(() => setCelebration(""), 2600);
+    beep(920);
+  }
+  function resolveCharacterEvent(choice: "a" | "b") {
+    setGame((g) => {
+      const id = g.characterEvent;
+      if (!id) return g;
+      let next = {
+        ...g,
+        characterEvent: null,
+        storyChoices: [...g.storyChoices, `${id}:${choice}`],
+      };
+      const arc = (key: string, amount = 1) => ({
+        ...next.characterArcs,
+        [key]: (next.characterArcs[key] || 0) + amount,
+      });
+      if (id === "maya_intro") {
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                cash: next.cash - 120,
+                expenses: next.expenses + 120,
+                dailyExpenses: next.dailyExpenses + 120,
+                residents: next.residents.map((r) =>
+                  r.id === "maya"
+                    ? {
+                        ...r,
+                        relationship: clamp(r.relationship + 14, -50, 100),
+                        loyalty: clamp(r.loyalty + 8, 0, 100),
+                      }
+                    : r,
+                ),
+                socialCapital: clamp(next.socialCapital + 5, 0, 100),
+                pendingConsequences: [
+                  ...next.pendingConsequences,
+                  {
+                    dueDay: next.day + 3,
+                    key: "maya_showcase",
+                    label: "Maya's showcase",
+                  },
+                ],
+                characterArcs: arc("maya"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Maya",
+                    text: "Thank you for taking a chance on us. I won’t forget it.",
+                    tone: "warm",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                focus: clamp(next.focus + 5, 0, 100),
+                residents: next.residents.map((r) =>
+                  r.id === "maya"
+                    ? {
+                        ...r,
+                        relationship: clamp(r.relationship + 5, -50, 100),
+                      }
+                    : r,
+                ),
+                characterArcs: arc("maya"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Maya",
+                    text: "The advice helped. I hope we can do something together another time.",
+                    tone: "warm",
+                  },
+                  ...next.storyInbox,
+                ],
+              };
+      }
+      if (id === "maya_return")
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                cash: next.cash - 250,
+                expenses: next.expenses + 250,
+                dailyExpenses: next.dailyExpenses + 250,
+                reputation: clamp(next.reputation + 10, 0, 100),
+                socialCapital: clamp(next.socialCapital + 12, 0, 100),
+                characterArcs: arc("maya"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Maya",
+                    text: "You are part of this community now—not just another business in it.",
+                    tone: "warm",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                reputation: clamp(next.reputation + 3, 0, 100),
+                characterArcs: arc("maya"),
+              };
+      if (id === "team_future")
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                cash: next.cash - 300,
+                expenses: next.expenses + 300,
+                dailyExpenses: next.dailyExpenses + 300,
+                staff: next.staff.map((m) => ({
+                  ...m,
+                  salary: m.salary + 5,
+                  loyalty: clamp(m.loyalty + 10, 0, 100),
+                })),
+                pendingConsequences: [
+                  ...next.pendingConsequences,
+                  {
+                    dueDay: next.day + 4,
+                    key: "team_trust",
+                    label: "Team leadership path",
+                  },
+                ],
+                characterArcs: arc("team"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Your Team",
+                    text: "A path to leadership changes what we are willing to build together.",
+                    tone: "urgent",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                staff: next.staff.map((m) => ({
+                  ...m,
+                  morale: clamp(m.morale - 8, 20, 100),
+                  loyalty: clamp(m.loyalty - 6, 0, 100),
+                })),
+                focus: clamp(next.focus + 5, 0, 100),
+                characterArcs: arc("team"),
+              };
+      if (id === "mentor_test")
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                energy: clamp(next.energy + 25, 0, 100),
+                stress: clamp(next.stress - 18, 0, 100),
+                capacity: Math.max(0, next.capacity - 2),
+                pendingConsequences: [
+                  ...next.pendingConsequences,
+                  {
+                    dueDay: next.day + 4,
+                    key: "mentor_discipline",
+                    label: "Nadia's discipline test",
+                  },
+                ],
+                characterArcs: arc("mentor"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Nadia Chen",
+                    text: "Anyone can push. Leaders know when to create recovery capacity.",
+                    tone: "mentor",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                reputation: clamp(next.reputation + 4, 0, 100),
+                stress: clamp(next.stress + 10, 0, 100),
+                characterArcs: arc("mentor"),
+              };
+      if (id === "rival_offer")
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                cash: next.cash - 180,
+                expenses: next.expenses + 180,
+                dailyExpenses: next.dailyExpenses + 180,
+                rivals: next.rivals.map((r) =>
+                  r.id === "claire"
+                    ? {
+                        ...r,
+                        relationship: clamp(r.relationship + 18, -50, 100),
+                      }
+                    : r,
+                ),
+                alliances: next.alliances + 1,
+                pendingConsequences: [
+                  ...next.pendingConsequences,
+                  {
+                    dueDay: next.day + 3,
+                    key: "rival_reciprocity",
+                    label: "Claire's shared event",
+                  },
+                ],
+                characterArcs: arc("rival"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Claire Wong",
+                    text: "Let’s prove Toronto founders can grow the ecosystem and still compete.",
+                    tone: "rival",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                leaguePoints: next.leaguePoints + 8,
+                rivals: next.rivals.map((r) =>
+                  r.id === "claire"
+                    ? {
+                        ...r,
+                        relationship: clamp(r.relationship - 12, -50, 100),
+                        momentum: r.momentum + 1,
+                      }
+                    : r,
+                ),
+                characterArcs: arc("rival"),
+              };
+      if (id === "identity")
+        next =
+          choice === "a"
+            ? {
+                ...next,
+                archetype:
+                  next.archetype === "undecided" ? "community" : next.archetype,
+                socialCapital: clamp(next.socialCapital + 12, 0, 100),
+                characterArcs: arc("self"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Founder Journal",
+                    text: "You chose to measure success by the trust that survives your ambition.",
+                    tone: "mentor",
+                  },
+                  ...next.storyInbox,
+                ],
+              }
+            : {
+                ...next,
+                archetype:
+                  next.archetype === "undecided" ? "operator" : next.archetype,
+                reputation: clamp(next.reputation + 8, 0, 100),
+                skillPoints: next.skillPoints + 1,
+                characterArcs: arc("self"),
+                storyInbox: [
+                  {
+                    day: next.day,
+                    from: "Founder Journal",
+                    text: "You chose disciplined ambition—and accepted the weight that comes with it.",
+                    tone: "mentor",
+                  },
+                  ...next.storyInbox,
+                ],
+              };
+      next.message = `${CHARACTER_EVENTS[id].speaker}: this choice is now part of your founder story.`;
+      return next;
+    });
+    beep(780);
+  }
+  function upgradeSkill(key: SkillKey) {
+    if (!game.skillPoints || game.skills[key] >= 5) return;
+    setGame((g) => ({
+      ...g,
+      skillPoints: g.skillPoints - 1,
+      skills: { ...g.skills, [key]: g.skills[key] + 1 },
+      message: `${SKILLS[key].name} advanced to level ${g.skills[key] + 1}.`,
+    }));
+    beep(850);
+  }
+  function meetMentor(key: keyof typeof MENTORS) {
+    if (game.cash < 120) return;
+    const m = MENTORS[key];
+    advance((g) => ({
+      ...g,
+      cash: g.cash - 120,
+      expenses: g.expenses + 120,
+      dailyExpenses: g.dailyExpenses + 120,
+      focus: clamp(g.focus + 16, 0, 100),
+      stress: clamp(g.stress - 8, 0, 100),
+      mentorTrust: {
+        ...g.mentorTrust,
+        [key]: clamp(g.mentorTrust[key] + 10, 0, 100),
+      },
+      skills: { ...g.skills, [m.skill]: Math.min(5, g.skills[m.skill] + 1) },
+      message: `${m.name} sharpened your ${SKILLS[m.skill].name.toLowerCase()}.`,
+    }));
+    beep(700);
+  }
+  function chooseFunding(key: FundingKey) {
+    if (game.funding !== "bootstrapped" || key === "bootstrapped") return;
+    setGame((g) =>
+      key === "debt"
+        ? {
+            ...g,
+            funding: key,
+            cash: g.cash + 2200,
+            debtBalance: 2600,
+            message:
+              "A working-capital loan adds runway, with daily repayments.",
+          }
+        : {
+            ...g,
+            funding: key,
+            cash: g.cash + 3500,
+            equityGiven: 15,
+            reputation: clamp(g.reputation + 4, 0, 100),
+            message: "An angel invested $3,500 for 15% of the company.",
+          },
+    );
+    beep(760);
+  }
+  function resolveNegotiation(style: "firm" | "partner") {
+    setGame((g) => {
+      const id = g.negotiation,
+        bonus = g.skills.negotiation + (g.archetype === "dealmaker" ? 2 : 0);
+      let next = {
+        ...g,
+        negotiation: null,
+        negotiationWins: g.negotiationWins + 1,
+        focus: clamp(g.focus + 3 + bonus, 0, 100),
+      };
+      if (id === "lease")
+        next = {
+          ...next,
+          rentDiscount: clamp(
+            g.rentDiscount + (style === "firm" ? 0.04 : 0.07) + bonus * 0.01,
+            0,
+            0.25,
+          ),
+        };
+      if (id === "supplier")
+        next = {
+          ...next,
+          cash: g.cash + 150 + bonus * 75,
+          supplier: style === "partner" ? "local" : g.supplier,
+        };
+      if (id === "client")
+        next =
+          style === "firm"
+            ? {
+                ...next,
+                cash: g.cash + 700 + bonus * 120,
+                revenue: g.revenue + 700 + bonus * 120,
+              }
+            : {
+                ...next,
+                reputation: clamp(g.reputation + 7 + bonus, 0, 100),
+                pmf: clamp(g.pmf + 4 + bonus, 0, 100),
+              };
+      if (id === "bank")
+        next = {
+          ...next,
+          cash: g.cash + (style === "partner" ? 1700 : 1100) + bonus * 150,
+          debtBalance: g.debtBalance + (style === "partner" ? 1900 : 1250),
+        };
+      if (id === "talentdeal")
+        next = {
+          ...next,
+          staff: g.staff.map((m) => ({
+            ...m,
+            morale: clamp(
+              m.morale + (style === "partner" ? 14 : 7) + bonus,
+              20,
+              100,
+            ),
+            loyalty: clamp(
+              m.loyalty + (style === "partner" ? 16 : 9) + bonus,
+              20,
+              100,
+            ),
+            salary: m.salary + (style === "partner" ? 8 : 3),
+          })),
+        };
+      next.message = `Deal reached with a ${style === "firm" ? "clear commercial boundary" : "relationship-first trade-off"}.`;
+      window.setTimeout(() => beginNextDay(next), 0);
+      return next;
+    });
+    beep(780);
+  }
+
+  function playerMarketShare() {
+    return clamp(
+      100 - game.competitors.reduce((sum, c) => sum + c.share, 0),
+      10,
+      65,
+    );
+  }
+
+  function adviserAdvice(key: AdviserKey) {
+    const advice = {
+      finance: {
+        name: "Mira",
+        role: "Finance",
+        icon: "$",
+        confidence: game.cash < 1000 ? 92 : 74,
+        text:
+          game.cash < 1000
+            ? "Protect runway: move supply to value tier and raise price before the next rent cycle."
+            : "Margin can fund growth. Raise price 10% and preserve cash for payroll.",
+        action: "Adopt margin plan",
+      },
+      marketing: {
+        name: "Leo",
+        role: "Growth",
+        icon: "✦",
+        confidence: game.reputation < 70 ? 89 : 71,
+        text: "Invest $180 in a focused neighbourhood campaign. It conflicts with Finance, but adds reputation quickly.",
+        action: "Launch campaign",
+      },
+      people: {
+        name: "Asha",
+        role: "People",
+        icon: "♥",
+        confidence: game.staff.length ? 86 : 58,
+        text: game.staff.length
+          ? "Spend $160 on recovery and recognition before morale becomes a service-quality risk."
+          : "Hire before scaling demand. A solo founder is now the operating bottleneck.",
+        action: game.staff.length ? "Fund team recovery" : "Back hiring plan",
+      },
+      operations: {
+        name: "Owen",
+        role: "Operations",
+        icon: "⚙",
+        confidence: game.capacity < game.maxCapacity / 2 ? 93 : 76,
+        text: "Spend $140 to stabilize capacity and standardize on the reliable local supplier.",
+        action: "Stabilize operations",
+      },
+    };
+    return advice[key];
+  }
+
+  function followAdvice(key: AdviserKey) {
+    setGame((g) => {
+      let next = { ...g };
+      if (key === "finance")
+        next = {
+          ...next,
+          price: clamp(next.price + 0.1, 0.7, 1.5),
+          supplier: "budget",
+          staff: next.staff.map((m) => ({
+            ...m,
+            morale: clamp(m.morale - 3, 20, 100),
+          })),
+          message:
+            "Finance plan adopted: margin improved, but the team dislikes the cost pressure.",
+        };
+      if (key === "marketing" && next.cash >= 180)
+        next = {
+          ...next,
+          cash: next.cash - 180,
+          expenses: next.expenses + 180,
+          dailyExpenses: next.dailyExpenses + 180,
+          reputation: clamp(next.reputation + 10, 0, 100),
+          message:
+            "Growth campaign launched. Finance warns that runway has shortened.",
+        };
+      if (key === "people" && next.staff.length && next.cash >= 160)
+        next = {
+          ...next,
+          cash: next.cash - 160,
+          expenses: next.expenses + 160,
+          dailyExpenses: next.dailyExpenses + 160,
+          reputation: clamp(next.reputation + 2, 0, 100),
+          staff: next.staff.map((m) => ({
+            ...m,
+            morale: clamp(m.morale + 15, 20, 100),
+          })),
+          message: "Team recovery funded. Morale and service confidence rose.",
+        };
+      if (key === "people" && !next.staff.length) {
+        window.setTimeout(hireStaff, 0);
+        return next;
+      }
+      if (key === "operations" && next.cash >= 140)
+        next = {
+          ...next,
+          cash: next.cash - 140,
+          expenses: next.expenses + 140,
+          dailyExpenses: next.dailyExpenses + 140,
+          supplier: "local",
+          capacity: next.maxCapacity,
+          message:
+            "Operations stabilized capacity and restored the local supplier.",
+        };
+      next.adviserTrust = Object.fromEntries(
+        Object.entries(next.adviserTrust).map(([k, v]) => [
+          k,
+          clamp(v + (k === key ? 7 : -2), 10, 100),
+        ]),
+      ) as Record<AdviserKey, number>;
+      return updateQuests(next);
+    });
+    beep(690);
+  }
+
+  if (!hydrated)
+    return <main className="loading">Opening your neighbourhood…</main>;
+
+  return (
+    <main
+      className={`game-shell phase-${game.phase} weather-${game.weather} economy-${game.economy} day-${currentDayPhase} ${reducedMotion ? "reduced-motion" : ""} ${highContrast ? "high-contrast" : ""}`}
+    >
+      <div className="sky">
+        <span className="cloud c1" />
+        <span className="cloud c2" />
+        <span className="sun" />
+      </div>
+      <header className="topbar">
+        <button
+          className="brand"
+          onClick={() => setGame((g) => ({ ...g, phase: "home" }))}
+          aria-label="Micro Empire home"
+        >
+          <span>MICRO</span>
+          <strong>EMPIRE</strong>
+        </button>
+        <div className="hud" aria-label="Game status">
+          <Stat
+            icon="▣"
+            label="Day"
+            value={`${game.day} / ${game.campaignDays}`}
+          />
+          <Stat
+            icon="$"
+            label="Cash"
+            value={money(game.cash)}
+            danger={game.cash < 250}
+          />
+          <Stat icon="★" label="Reputation" value={`${game.reputation}`} />
+          <Stat icon="◷" label="Time" value={clock} />
+        </div>
+        <button
+          className={`edition-pill ${canAccessCommercial(editionStatus) ? "founder" : "community"}`}
+          onClick={() => setShowCommercial(true)}
+        >
+          <small>
+            {editionStatus.source === "vercel" ? "VERCEL" : "COMMUNITY"}
+          </small>
+          <b>
+            {canAccessCommercial(editionStatus)
+              ? "Founder Licence"
+              : "Free Edition"}
+          </b>
+        </button>
+        <button
+          className="account-pill"
+          onClick={() => {
+            setAuthMode(authUser ? "profile" : "signin");
+            setShowAccount(true);
+          }}
+        >
+          <small>{authUser ? "FOUNDER ACCOUNT" : "OPTIONAL ACCOUNT"}</small>
+          <b>
+            {authUser
+              ? authDisplayName || authUser.email || "Signed in"
+              : "Sign in"}
+          </b>
+        </button>
+        <button
+          className="icon-button"
+          onClick={() => setSound(!sound)}
+          aria-label="Toggle sound"
+        >
+          {sound ? "♪" : "×"}
+        </button>
+        <button
+          className="icon-button"
+          onClick={() => setShowAtmosphere(true)}
+          aria-label="Audio and atmosphere settings"
+        >
+          ⚙
+        </button>
+        <button
+          className="icon-button"
+          onClick={() => setShowHelp(true)}
+          aria-label="How to play"
+        >
+          ?
+        </button>
+      </header>
+
+      <nav className="mobile-nav" aria-label="Mobile game navigation">
+        <button
+          onClick={() => setGame((current) => ({ ...current, phase: "home" }))}
+          aria-label="Home"
+        >
+          <i>⌂</i>
+          <span>Home</span>
+        </button>
+        <button
+          onClick={() => {
+            setAuthMode(authUser ? "profile" : "signin");
+            setShowAccount(true);
+          }}
+          aria-label={authUser ? "Founder account" : "Sign in"}
+        >
+          <i>●</i>
+          <span>{authUser ? "Account" : "Sign in"}</span>
+        </button>
+        <button onClick={() => setShowCommercial(true)} aria-label="Editions">
+          <i>♛</i>
+          <span>Licence</span>
+        </button>
+        <button onClick={() => setShowAtmosphere(true)} aria-label="Settings">
+          <i>⚙</i>
+          <span>Settings</span>
+        </button>
+        <button onClick={() => setShowHelp(true)} aria-label="How to play">
+          <i>?</i>
+          <span>Help</span>
+        </button>
+      </nav>
+
+      {game.phase === "home" && (
+        <section className="home-screen cover-home screen">
+          <div className="game-cover">
+            <img
+              src={`${import.meta.env.BASE_URL}micro-empire-cover.webp`}
+              alt="Micro Empire: The 7-Day Startup Challenge board-game cover, overlooking a lively Toronto neighbourhood with Coffee Cart, Career Studio, and AI Agency business cards."
+              width="1586"
+              height="992"
+              fetchPriority="high"
+            />
+            <button
+              className="cover-start-hotspot"
+              onClick={() => setGame((g) => ({ ...g, phase: "modes" }))}
+              aria-label="Start your Micro Empire and choose a game mode"
+            >
+              <span>Start your empire</span>
+            </button>
+          </div>
+
+          <div className="cover-controls">
+            <p>
+              <b>Micro Empire</b>
+              <span>A Learning Semantics Simulation · V6.4.4</span>
+            </p>
+            <button
+              className="primary cover-mobile-start"
+              onClick={() => setGame((g) => ({ ...g, phase: "modes" }))}
+            >
+              Start your empire <span>→</span>
+            </button>
+            {game.business && (
+              <button
+                className="cover-secondary"
+                onClick={() => setGame((g) => ({ ...g, phase: "play" }))}
+              >
+                Continue saved game · Day {game.day}
+              </button>
+            )}
+            <button
+              className="cover-secondary"
+              onClick={() => setShowCommercial(true)}
+            >
+              Founder Licence
+            </button>
+            <button
+              className="cover-secondary"
+              onClick={() => setShowCredits(true)}
+            >
+              Free Edition
+            </button>
+          </div>
+        </section>
+      )}
+
+      {game.phase === "modes" && (
+        <section className="mode-screen screen">
+          <div className="selection-head">
+            <p className="eyebrow">Micro Empire V3</p>
+            <h2>How will you build?</h2>
+            <p>
+              Every mode uses the complete economy, staff, supply, competition
+              and agentic-adviser systems.
+            </p>
+          </div>
+          <div className="mode-grid">
+            <button
+              onClick={() =>
+                setGame((g) => ({
+                  ...initialState,
+                  phase: "select",
+                  mode: "campaign",
+                  campaignDays: 30,
+                  scenarioName: "The 30-Day Founder Campaign",
+                  runModifier: selectedModifier,
+                }))
+              }
+            >
+              <i>◆</i>
+              <small>CORE EXPERIENCE</small>
+              <b>Founder Campaign</b>
+              <span>
+                Thirty days, four growth stages and five consequential story
+                decisions.
+              </span>
+              <em>30 days · configurable difficulty</em>
+            </button>
+            <button onClick={prepareDailyChallenge}>
+              <i>◷</i>
+              <small>SAME FOR EVERY PLAYER</small>
+              <b>Daily Challenge</b>
+              <span>
+                A fixed business, district and Mogul economy generated from
+                today’s date.
+              </span>
+              <em>14 days · share your final score</em>
+            </button>
+            <button
+              onClick={() => setGame((g) => ({ ...g, phase: "scenario" }))}
+            >
+              <i>⚙</i>
+              <small>CREATE &amp; SHARE</small>
+              <b>Scenario Lab</b>
+              <span>
+                Design campaign rules and generate a portable challenge code.
+              </span>
+              <em>Custom cash · length · market</em>
+            </button>
+          </div>
+          <div className="modifier-picker">
+            <p>
+              <small>RUN MODIFIER</small>
+              <b>Choose how this attempt will challenge you</b>
+            </p>
+            <div>
+              {(Object.keys(RUN_MODIFIERS) as ModifierKey[]).map((key) => (
+                <button
+                  key={key}
+                  className={selectedModifier === key ? "selected" : ""}
+                  onClick={() => setSelectedModifier(key)}
+                >
+                  <i>{RUN_MODIFIERS[key].icon}</i>
+                  <span>
+                    <b>{RUN_MODIFIERS[key].name}</b>
+                    <small>{RUN_MODIFIERS[key].note}</small>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+          {runHistory.length > 0 && (
+            <div className="run-history-preview">
+              <small>RECENT RUNS</small>
+              {runHistory.slice(0, 3).map((run) => (
+                <span key={run.id}>
+                  <b>{run.grade}</b>
+                  <em>{run.scenario}</em>
+                  <strong>{run.score.toLocaleString()}</strong>
+                </span>
+              ))}
+            </div>
+          )}
+          <div className="founder-trials">
+            <p>
+              <small>FOUNDER PROGRESSION</small>
+              <b>Unlockable Toronto trials</b>
+            </p>
+            <div>
+              {FOUNDER_TRIALS.map((trial) => {
+                const unlocked = currentFounderLevel.level >= trial.level;
+                return (
+                  <button
+                    key={trial.id}
+                    className={unlocked ? "unlocked" : "locked"}
+                    disabled={!unlocked}
+                    onClick={() => launchFounderTrial(trial.id)}
+                  >
+                    <i>{unlocked ? trial.icon : "×"}</i>
+                    <span>
+                      <small>
+                        {unlocked
+                          ? "UNLOCKED"
+                          : `LEVEL ${trial.level} REQUIRED`}
+                      </small>
+                      <b>{trial.name}</b>
+                      <em>{trial.note}</em>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <button
+            className="text-button"
+            onClick={() => setGame((g) => ({ ...g, phase: "home" }))}
+          >
+            ← Home
+          </button>
+        </section>
+      )}
+
+      {game.phase === "scenario" && (
+        <section className="scenario-screen screen">
+          <div className="scenario-builder">
+            <p className="eyebrow">Scenario laboratory</p>
+            <h2>Design a founder challenge</h2>
+            <div className="builder-grid">
+              <label>
+                Scenario name
+                <input
+                  value={scenarioDraft.name}
+                  onChange={(e) =>
+                    setScenarioDraft({ ...scenarioDraft, name: e.target.value })
+                  }
+                />
+              </label>
+              <label>
+                Starting cash
+                <input
+                  type="number"
+                  min="500"
+                  max="5000"
+                  step="100"
+                  value={scenarioDraft.cash}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      cash: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+              <label>
+                Campaign days
+                <input
+                  type="range"
+                  min="7"
+                  max="30"
+                  value={scenarioDraft.days}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      days: Number(e.target.value),
+                    })
+                  }
+                />
+                <b>{scenarioDraft.days} days</b>
+              </label>
+              <label>
+                Difficulty
+                <select
+                  value={scenarioDraft.difficulty}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      difficulty: e.target.value as DifficultyKey,
+                    })
+                  }
+                >
+                  {(Object.keys(DIFFICULTIES) as DifficultyKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {DIFFICULTIES[k].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Business
+                <select
+                  value={scenarioDraft.business}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      business: e.target.value as BusinessKey,
+                    })
+                  }
+                >
+                  {(Object.keys(BUSINESSES) as BusinessKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {BUSINESSES[k].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                District
+                <select
+                  value={scenarioDraft.district}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      district: e.target.value as DistrictKey,
+                    })
+                  }
+                >
+                  {(Object.keys(DISTRICTS) as DistrictKey[]).map((k) => (
+                    <option key={k} value={k}>
+                      {DISTRICTS[k].name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Challenge seed
+                <input
+                  type="number"
+                  value={scenarioDraft.seed}
+                  onChange={(e) =>
+                    setScenarioDraft({
+                      ...scenarioDraft,
+                      seed: Number(e.target.value),
+                    })
+                  }
+                />
+              </label>
+            </div>
+            <div className="code-box">
+              <textarea
+                aria-label="Challenge code"
+                value={scenarioCode()}
+                readOnly
+              />
+              <button onClick={shareScenario}>Copy code</button>
+            </div>
+            <div className="import-box">
+              <input id="import-code" placeholder="Paste a challenge code" />
+              <button
+                onClick={() =>
+                  importScenario(
+                    (document.getElementById("import-code") as HTMLInputElement)
+                      .value,
+                  )
+                }
+              >
+                Import
+              </button>
+            </div>
+            {shareStatus && <p className="share-status">{shareStatus}</p>}
+            <button className="primary" onClick={launchCustomScenario}>
+              Launch scenario <span>→</span>
+            </button>
+            <button
+              className="text-button"
+              onClick={() => setGame((g) => ({ ...g, phase: "modes" }))}
+            >
+              ← Game modes
+            </button>
+          </div>
+        </section>
+      )}
+
+      {game.phase === "select" && (
+        <section className="select-screen screen">
+          <div className="selection-head">
+            <p className="eyebrow">Choose your first venture</p>
+            <h2>What will you build?</h2>
+            <p>
+              Each business has a different rhythm. You begin with $1,000—spend
+              wisely.
+            </p>
+          </div>
+          <div className="business-grid">
+            {(Object.keys(BUSINESSES) as BusinessKey[]).map((key) => {
+              const b = BUSINESSES[key];
+              return (
+                <button
+                  key={key}
+                  className={`business-card ${b.color} ${selected === key ? "selected" : ""}`}
+                  onClick={() => setSelected(key)}
+                >
+                  <span className="biz-icon">{b.icon}</span>
+                  <span className="selected-mark">✓</span>
+                  <strong>{b.name}</strong>
+                  <em>{b.tagline}</em>
+                  <span className="mini-scene">
+                    <i />
+                    <i />
+                    <i />
+                  </span>
+                  <span className="biz-desc">{b.description}</span>
+                  <span className="setup">
+                    Setup <b>{money(b.cost)}</b>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+          <button
+            className="primary"
+            onClick={() =>
+              setGame((g) => ({ ...g, phase: "district", business: selected }))
+            }
+          >
+            Choose your location <span>→</span>
+          </button>
+          <button
+            className="text-button"
+            onClick={() => setGame((g) => ({ ...g, phase: "home" }))}
+          >
+            ← Back
+          </button>
+        </section>
+      )}
+
+      {game.phase === "district" && (
+        <section className="district-screen screen">
+          <div className="selection-head">
+            <p className="eyebrow">Toronto opportunity map</p>
+            <h2>Choose your neighbourhood</h2>
+            <p>
+              Location changes rent, customer mix and the strategy required to
+              win.
+            </p>
+          </div>
+          {game.mode === "daily" && (
+            <p className="daily-lock">
+              ◷ Daily rules are locked so every player receives the same
+              challenge.
+            </p>
+          )}
+          <div className="difficulty-row">
+            {(Object.keys(DIFFICULTIES) as DifficultyKey[]).map((key) => (
+              <button
+                key={key}
+                disabled={game.mode === "daily"}
+                className={game.difficulty === key ? "selected" : ""}
+                onClick={() => setGame((g) => ({ ...g, difficulty: key }))}
+              >
+                <i>{DIFFICULTIES[key].icon}</i>
+                <b>{DIFFICULTIES[key].name}</b>
+                <span>{DIFFICULTIES[key].note}</span>
+              </button>
+            ))}
+          </div>
+          <div className="city-map">
+            <div className="map-water">LAKE ONTARIO</div>
+            <div className="map-grid" />
+            {(Object.keys(DISTRICTS) as DistrictKey[]).map((key, index) => {
+              const d = DISTRICTS[key];
+              return (
+                <button
+                  key={key}
+                  disabled={game.mode === "daily"}
+                  className={`district-pin pin-${index + 1} ${game.district === key ? "selected" : ""}`}
+                  onClick={() => setGame((g) => ({ ...g, district: key }))}
+                >
+                  <i>{d.icon}</i>
+                  <strong>{d.name}</strong>
+                  <span>{d.tone}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="district-detail">
+            <div>
+              <p className="eyebrow">Selected district</p>
+              <h3>{DISTRICTS[game.district].name}</h3>
+              <p>{DISTRICTS[game.district].description}</p>
+            </div>
+            <dl>
+              <div>
+                <dt>Daily rent</dt>
+                <dd>
+                  {money(
+                    Math.round(
+                      DISTRICTS[game.district].rent *
+                        DIFFICULTIES[game.difficulty].rent,
+                    ),
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Difficulty</dt>
+                <dd>{DIFFICULTIES[game.difficulty].name}</dd>
+              </div>
+              <div>
+                <dt>Core customers</dt>
+                <dd>{DISTRICTS[game.district].segments.join(" · ")}</dd>
+              </div>
+            </dl>
+          </div>
+          <button className="primary" onClick={startBusiness}>
+            Open in {DISTRICTS[game.district].name} <span>→</span>
+          </button>
+          <button
+            className="text-button"
+            onClick={() => setGame((g) => ({ ...g, phase: "select" }))}
+          >
+            ← Change business
+          </button>
+        </section>
+      )}
+
+      {game.phase === "play" && business && (
+        <section className="play-screen screen">
+          <aside className="left-panel">
+            <p className="eyebrow">
+              {business.icon} {business.name}
+            </p>
+            <h2>Day {game.day}</h2>
+            <div className="stage-card">
+              <i>{STAGES[stageIndex].icon}</i>
+              <span>
+                <small>
+                  {game.mode.toUpperCase()} · {game.scenarioName}
+                </small>
+                <b>{STAGES[stageIndex].name}</b>
+                <em>{STAGES[stageIndex].note}</em>
+              </span>
+            </div>
+            <div className="pmf-card">
+              <span>
+                <small>PRODUCT–MARKET FIT</small>
+                <b>{game.pmf}/100</b>
+              </span>
+              <i>
+                <u style={{ width: `${game.pmf}%` }} />
+              </i>
+              <em>
+                {game.pmf >= 75
+                  ? "Strong pull · protect retention"
+                  : game.pmf >= 50
+                    ? "Promising · keep experimenting"
+                    : "Weak signal · interview customers"}
+              </em>
+            </div>
+            <div className="founder-vitals">
+              <h3>Founder wellbeing</h3>
+              {[
+                ["Health", game.health],
+                ["Energy", game.energy],
+                ["Focus", game.focus],
+                ["Stress", game.stress],
+              ].map(([label, value]) => (
+                <span
+                  className={label === "Stress" ? "stress" : ""}
+                  key={label}
+                >
+                  <small>{label}</small>
+                  <i>
+                    <u style={{ width: `${value}%` }} />
+                  </i>
+                  <b>{value}</b>
+                </span>
+              ))}
+            </div>
+            <div className="location-chip">
+              {DISTRICTS[game.district].icon} {DISTRICTS[game.district].name} ·{" "}
+              {DIFFICULTIES[game.difficulty].name}
+              <small>
+                {money(
+                  Math.round(
+                    (DISTRICTS[game.district].rent + game.day * 10) *
+                      DIFFICULTIES[game.difficulty].rent,
+                  ),
+                )}{" "}
+                rent due today
+              </small>
+            </div>
+            <div className="city-status">
+              <span>
+                <small>YOU ARE IN</small>
+                <b>{CITY[game.founderLocation].name}</b>
+              </span>
+              <span>
+                <small>WEATHER</small>
+                <b>
+                  {WEATHER[game.weather].icon} {WEATHER[game.weather].name}
+                </b>
+              </span>
+              <span>
+                <small>ECONOMY</small>
+                <b>{ECONOMY[game.economy].name}</b>
+              </span>
+              <span>
+                <small>SOCIAL CAPITAL</small>
+                <b>{game.socialCapital}/100</b>
+              </span>
+              <span>
+                <small>PEOPLE HERE</small>
+                <b>
+                  {
+                    game.residents.filter(
+                      (r) => r.location === game.founderLocation,
+                    ).length
+                  }
+                </b>
+              </span>
+            </div>
+            <div className="founder-journey">
+              <h3>Your founder journey</h3>
+              {[
+                [
+                  game.placesVisited.length >= 3,
+                  "Explore Toronto",
+                  `${game.placesVisited.length}/3`,
+                ],
+                [game.served >= 5, "Prove demand", `${game.served}/5`],
+                [
+                  game.staff.length >= 1,
+                  "Build a team",
+                  `${game.staff.length}/1`,
+                ],
+                [
+                  game.residents.some((r) => r.relationship >= 20),
+                  "Earn trust",
+                  `${Math.max(0, ...game.residents.map((r) => r.relationship))}/20`,
+                ],
+                [
+                  game.branches.length >= 2,
+                  "Expand the empire",
+                  `${game.branches.length}/2`,
+                ],
+              ].map(([done, label, progress], i) => (
+                <div className={done ? "done" : ""} key={String(label)}>
+                  <i>{done ? "✓" : i + 1}</i>
+                  <span>
+                    {label}
+                    <small>{progress}</small>
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="event-banner">
+              {game.event || "A fresh day in the neighbourhood"}
+            </p>
+            <div className="quests">
+              <h3>Founder goals</h3>
+              <Quest
+                done={game.quests[0]}
+                label="Serve 30 customers"
+                progress={`${Math.min(game.served, 30)}/30`}
+              />
+              <Quest
+                done={game.quests[1]}
+                label="Reach 75 reputation"
+                progress={`${Math.min(game.reputation, 75)}/75`}
+              />
+              <Quest
+                done={game.quests[2]}
+                label="Earn $12,000 revenue"
+                progress={`${money(Math.min(game.revenue, 12000))}/$12,000`}
+              />
+            </div>
+            <div className="ledger">
+              <span>
+                Total revenue <b>{money(game.revenue)}</b>
+              </span>
+              <span>
+                Total expenses <b>{money(game.expenses)}</b>
+              </span>
+              <span>
+                Customers served <b>{game.served}</b>
+              </span>
+            </div>
+            <div className="segment-ledger">
+              <h3>Customer mix</h3>
+              {Object.entries(game.segmentSales)
+                .filter(([, count]) => count > 0)
+                .map(([segment, count]) => (
+                  <span key={segment}>
+                    <b>
+                      {SEGMENTS[segment as SegmentKey].icon} {segment}
+                    </b>
+                    <i>{count}</i>
+                  </span>
+                ))}
+              {game.served === 0 && (
+                <small>No sales yet—learn who responds.</small>
               )}
             </div>
             <div className="achievement-mini">
